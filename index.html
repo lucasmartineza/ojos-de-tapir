@@ -125,6 +125,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
   <div class="card g" style="display:flex;flex-direction:column;gap:12px">
     <div><div class="small muted">Relevamiento guardado</div><div id="homeSum" style="font-size:20px;font-weight:700">—</div></div>
     <button class="btn tint" data-go="camara"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Start</button>
+    <button class="btn2" id="homeReset" style="color:#FF6961"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Nueva carrera (empezar de cero)</button>
   </div>
   <div class="grid4">
     <button class="tile g" data-go="tramos" data-kmz="1"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><div><b>KMZ</b><br><span id="tileKmz">Sin cargar</span></div></button>
@@ -290,7 +291,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.9.1';
+var VERSION = '1.9.2';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1872,6 +1873,7 @@ document.getElementById('resetBtn').onclick = function () {
   document.getElementById('resetSum').textContent = 'Se borran de este iPhone: ' + (S.kmz ? 'el KMZ «' + S.kmz.file + '», ' : '') + pl(tramos().length, 'tramo', 'tramos') + ', ' + pl(ph, 'foto', 'fotos') + ', ' + pl(au, 'nota de voz', 'notas de voz') + ' y ' + pl(S.track.length, 'posición', 'posiciones') + ' GPS. No se puede deshacer.';
   document.getElementById('resetDim').classList.add('on');
 };
+document.getElementById('homeReset').onclick = function () { document.getElementById('resetBtn').click(); };
 document.getElementById('resetCancel').onclick = function () { document.getElementById('resetDim').classList.remove('on'); };
 document.getElementById('resetZip').onclick = function () { document.getElementById('resetDim').classList.remove('on'); document.getElementById('exZip').click(); };
 (function () {
