@@ -227,6 +227,14 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <div class="dim" id="ptDim"></div>
 <div class="sheet g" id="ptSheet" style="display:none"></div>
 <div id="viewer"><img alt=""></div>
+<div id="pdfView" style="position:fixed;inset:0;z-index:55;background:#000;display:none;flex-direction:column">
+  <div class="g" style="margin:calc(var(--sat) + 8px) 12px 0;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex:none"><b id="pvTitle">Mapa PDF</b><button id="pvClose" style="font-size:16px;color:var(--accent-soft)">Cerrar</button></div>
+  <div id="pvPages" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;display:flex;flex-direction:column;gap:12px"></div>
+  <div class="g" style="margin:0 12px calc(var(--sab) + 12px);border-radius:30px;padding:12px;display:flex;gap:10px;flex:none">
+    <button class="btn tint" id="pvShare" style="flex:1">Compartir</button>
+    <a class="btn" id="pvDown" style="flex:1;background:rgba(255,255,255,.14);color:#fff;text-decoration:none">Descargar</a>
+  </div>
+</div>
 <div class="dim" id="resetDim"><div class="sheet g" style="display:flex;flex-direction:column;gap:12px">
   <b style="font-size:20px">¿Empezar una carrera nueva?</b>
   <div class="small muted" id="resetSum" style="line-height:1.45"></div>
@@ -254,7 +262,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.5.0';
+var VERSION = '1.5.1';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1432,7 +1440,8 @@ function buildPDF(onStep) {
   var T = allTramos().map(function (t) { var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st); if (pts.length) pts[pts.length - 1].last = true; return { t: t, st: st, pts: pts }; }).filter(function (x) { return x.pts.length; });
   if (!T.length) return Promise.reject(new Error('Todavía no hay puntos para armar el mapa.'));
   var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true }), first = true, today = new Date().toLocaleDateString('es-AR');
-  function add(P) { if (!first) doc.addPage(); first = false; doc.addImage(P.c.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, 595.28, 841.89); }
+  var previews = [];
+  function add(P) { if (!first) doc.addPage(); first = false; var u = P.c.toDataURL('image/jpeg', 0.86); previews.push(u); doc.addImage(u, 'JPEG', 0, 0, 595.28, 841.89); }
   var COLORS = ['#7FE3F0', '#FF9F0A', '#BF5AF2', '#30D158', '#FF375F', '#64D2FF', '#5E5CE6', '#AC8E68'];
   // hoja 1: mapa general
   onStep('Armando el mapa general…');
@@ -1492,19 +1501,28 @@ function buildPDF(onStep) {
         });
       });
     }, Promise.resolve());
-  }).then(function () { return doc.output('blob'); });
+  }).then(function () { return { blob: doc.output('blob'), previews: previews }; });
 }
+var PV = { file: null, url: null };
 document.getElementById('pdfBtn').onclick = function () {
   var btn = this, msg = document.getElementById('pdfMsg'); btn.disabled = true;
-  buildPDF(function (t) { msg.textContent = t; }).then(function (blob) {
+  buildPDF(function (t) { msg.textContent = t; }).then(function (r) {
     var name = 'ojos-de-tapir_' + (S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '').replace(/[^\w\-]+/g, '_') + '_' : '') + new Date().toISOString().slice(0, 10) + '.pdf';
-    var file = new File([blob], name, { type: 'application/pdf' });
-    msg.textContent = 'Listo: ' + (blob.size / 1048576).toFixed(1).replace('.', ',') + ' MB.';
-    if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(function () {});
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    if (PV.url) URL.revokeObjectURL(PV.url);
+    PV.file = new File([r.blob], name, { type: 'application/pdf' }); PV.url = URL.createObjectURL(r.blob);
+    msg.textContent = 'Listo: ' + pl(r.previews.length, 'hoja', 'hojas') + ' · ' + (r.blob.size / 1048576).toFixed(1).replace('.', ',') + ' MB.';
+    document.getElementById('pvTitle').textContent = 'Mapa PDF · ' + pl(r.previews.length, 'hoja', 'hojas');
+    document.getElementById('pvPages').innerHTML = r.previews.map(function (u, i) { return '<img src="' + u + '" alt="Hoja ' + (i + 1) + '" style="width:100%;border-radius:12px;display:block">'; }).join('');
+    var a = document.getElementById('pvDown'); a.href = PV.url; a.download = name;
+    document.getElementById('pdfView').style.display = 'flex';
   }).catch(function (e) { msg.textContent = e.message || 'No se pudo armar el PDF'; }).then(function () { btn.disabled = false; });
 };
-
+document.getElementById('pvClose').onclick = function () { document.getElementById('pdfView').style.display = 'none'; };
+document.getElementById('pvShare').onclick = function () {
+  // compartir tiene que salir directo del toque (iOS lo exige)
+  if (PV.file && navigator.canShare && navigator.canShare({ files: [PV.file] })) navigator.share({ files: [PV.file], title: PV.file.name }).catch(function () {});
+  else if (PV.url) window.open(PV.url, '_blank');
+};
 /* ---------- nueva carrera (reset) ---------- */
 document.getElementById('resetBtn').onclick = function () {
   var ph = S.media.filter(function (m) { return m.type === 'photo'; }).length, au = S.media.filter(function (m) { return m.type === 'audio'; }).length;
