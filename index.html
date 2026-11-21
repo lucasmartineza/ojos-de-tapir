@@ -291,7 +291,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.10.3';
+var VERSION = '1.10.4';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1498,39 +1498,75 @@ function drawCover(g, bm, x, y, w, h, r) {
   g.restore();
 }
 var SIGC = { 'Buena': '#34C759', 'Débil': '#FFD60A', 'Sin datos': '#FF9F0A' };
-function drawCard(g, p, x, y, w, h) {
-  rr(g, x, y, w, h, 16); g.fillStyle = 'rgba(255,255,255,.07)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = .8; g.stroke();
-  var ph = p.photos, jobs = [];
-  if (ph.length === 1) jobs.push(bitmapOf(ph[0]).then(function (b) { drawCover(g, b, x + 10, y + 10, 104, h - 20, 8); }));
-  else if (ph.length > 1) {
-    var hh = (h - 26) / 2;
-    jobs.push(bitmapOf(ph[0]).then(function (b) { drawCover(g, b, x + 10, y + 10, 104, hh, 8); }));
-    jobs.push(bitmapOf(ph[1]).then(function (b) { drawCover(g, b, x + 10, y + 16 + hh, 104, hh, 8); if (ph.length > 2) { font(g, '700', 11); var t = '+' + (ph.length - 2), tw = g.measureText(t).width; g.fillStyle = 'rgba(0,0,0,.65)'; rr(g, x + 110 - tw - 10, y + h - 30, tw + 8, 16, 6); g.fill(); g.fillStyle = '#fff'; g.fillText(t, x + 110 - tw - 6, y + h - 18); } }));
-  } else { g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, x + 10, y + 10, 104, h - 20, 8); g.fill(); }
-  var tx = ph.length ? x + 124 : x + 124, tw2 = w - (tx - x) - 12;
+// ficha de un punto: ancho completo, la altura se adapta al texto
+function cardText(p) {
+  var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
+  var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
+  var acc = accessOf(p); if (acc) desc = 'Acceso a pie: ' + fmtD(acc.len) + ' desde el auto. ' + desc;
+  return { desc: desc, txt: desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : 'Sin descripción.'), authors: authors };
+}
+function wrapLines(g, text, maxW) {
+  var out = []; String(text).split(/\n/).forEach(function (para) {
+    var words = para.split(/\s+/).filter(Boolean), line = '';
+    words.forEach(function (wd) { var t = line ? line + ' ' + wd : wd; if (g.measureText(t).width > maxW && line) { out.push(line); line = wd; } else line = t; });
+    if (line) out.push(line);
+  });
+  return out;
+}
+var CARD = { photoW: 170, pad: 12, lh: 17 };
+function cardLayout(g, p, w) {
+  var tx = CARD.pad + CARD.photoW + 14, tw = w - tx - 16, ct = cardText(p), ics = iconsOf(p);
+  font(g, '500', 13); var lines = wrapLines(g, ct.txt, tw);
+  var top = 84 + (ics.length ? 24 : 0), h = Math.max(140, top + lines.length * CARD.lh + (ct.authors.length && ct.desc ? 20 : 0) + 6);
+  return { h: h, tx: tx, tw: tw, lines: lines, ct: ct, ics: ics, top: top };
+}
+function drawCard(g, p, x, y, w, L) {
+  var h = L.h; rr(g, x, y, w, h, 18); g.fillStyle = 'rgba(255,255,255,.07)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = .8; g.stroke();
+  var ph = p.photos, jobs = [], pw = CARD.photoW, px = x + CARD.pad, py = y + CARD.pad, avail = h - 2 * CARD.pad;
+  var n = Math.min(ph.length, Math.max(1, Math.min(3, Math.floor((avail + 6) / 96)))), hh = (avail - (n - 1) * 6) / n;
+  if (!ph.length) { g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, px, py, pw, avail, 10); g.fill(); }
+  ph.slice(0, n).forEach(function (m, i) {
+    jobs.push(bitmapOf(m).then(function (b) {
+      drawCover(g, b, px, py + i * (hh + 6), pw, hh, 10);
+      if (i === n - 1 && ph.length > n) { font(g, '700', 12); var t = '+' + (ph.length - n), tw = g.measureText(t).width; g.fillStyle = 'rgba(0,0,0,.65)'; rr(g, px + pw - tw - 16, py + avail - 24, tw + 10, 18, 7); g.fill(); g.fillStyle = '#fff'; g.fillText(t, px + pw - tw - 11, py + avail - 11); }
+    }));
+  });
+  var tx = x + L.tx, tw2 = L.tw;
   return Promise.all(jobs).then(function () {
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(tx + 12, y + 22, 12, 0, 7); g.fill();
-    font(g, '800', 13); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, tx + 12, y + 23); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    font(g, '700', 13); g.fillStyle = '#fff';
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(tx + 13, y + 26, 13, 0, 7); g.fill();
+    font(g, '800', 14); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, tx + 13, y + 27); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    font(g, '700', 15); g.fillStyle = '#fff';
     var dtxt = p.offTxt ? p.offTxt : p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : 'Punto ' + p.n;
-    g.fillText(dtxt, tx + 30, y + 27);
-    var meta = [], sigc = p.signal ? SIGC[p.signal] : null;
+    g.fillText(fitTxt(g, dtxt, tw2 - 34), tx + 34, y + 31);
+    var meta = [];
     if (p.toEnd != null && p.last) meta.push(fmtD(p.toEnd) + ' a la llegada');
     meta.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ' · ' + pl(p.audios.length, 'nota', 'notas') : ''));
-    font(g, '500', 11.5); g.fillStyle = '#D1D1D6'; g.fillText(meta.join(' · '), tx, y + 52);
-    g.fillStyle = sigc || '#636366'; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText(fitTxt(g, p.signal ? 'Señal de celular: ' + p.signal.toLowerCase() : 'Señal: sin registro (foto importada)', tw2 - 14), tx + 13, y + 73);
-    var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
-    var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
-    var ics = iconsOf(p).map(function (k) { return ICONOS[k][0]; });
-    if (ics.length) {
-      var cx = tx, cy = y + 80; font(g, '600', 10.5);
-      ics.slice(0, 4).forEach(function (t) { var w2 = g.measureText(t).width + 14; if (cx + w2 > x + w - 10) return; g.fillStyle = 'rgba(255,255,255,.14)'; rr(g, cx, cy, w2, 17, 8.5); g.fill(); g.fillStyle = '#fff'; g.fillText(t, cx + 7, cy + 12); cx += w2 + 5; });
+    var sig = p.signal ? 'Señal de celular: ' + p.signal.toLowerCase() : 'Señal: sin registro (foto importada)';
+    font(g, '500', 12); g.fillStyle = '#D1D1D6'; var mt = meta.join(' · '); g.fillText(mt, tx, y + 56);
+    var sx = tx + g.measureText(mt).width + 16;
+    if (sx + 150 > tx + tw2) sx = null;
+    var sy = sx ? y + 56 : y + 74; if (!sx) sx = tx;
+    g.fillStyle = p.signal ? SIGC[p.signal] : '#636366'; g.beginPath(); g.arc(sx + 4, sy - 4, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText(fitTxt(g, sig, tx + tw2 - sx - 14), sx + 13, sy);
+    var cy = y + (sy > y + 60 ? 84 : 68);
+    if (L.ics.length) {
+      var cx = tx; font(g, '600', 11.5);
+      L.ics.forEach(function (k) { var t = ICONOS[k][0], w2 = g.measureText(t).width + 16; if (cx + w2 > tx + tw2) return; g.fillStyle = 'rgba(255,255,255,.14)'; rr(g, cx, cy, w2, 19, 9.5); g.fill(); g.fillStyle = '#fff'; g.fillText(t, cx + 8, cy + 13.5); cx += w2 + 6; });
+      cy += 24;
     }
-    var acc = accessOf(p); if (acc) desc = 'Acceso a pie: ' + fmtD(acc.len) + ' desde el auto. ' + desc;
-    font(g, '500', 12); g.fillStyle = desc ? '#F2F2F7' : '#8E8E93';
-    var ty0 = y + 93 + (ics.length ? 18 : 0);
-    wrap(g, desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : (authors.length ? 'Fotos de ' + authors.join(', ') : 'Sin descripción.')), tx, ty0, tw2, 15, Math.max(1, Math.floor((y + h - 10 - ty0) / 15) + 1));
+    font(g, '500', 13); g.fillStyle = L.ct.desc ? '#F2F2F7' : '#8E8E93';
+    var ty = cy + 14; L.lines.forEach(function (ln) { g.fillText(ln, tx, ty); ty += CARD.lh; });
+    if (L.ct.authors.length) { font(g, '500', 11.5); g.fillStyle = '#8E8E93'; g.fillText('Fotos de ' + L.ct.authors.join(', '), tx, L.ct.desc ? ty + 4 : y + L.h - 14); }
   });
+}
+// reparte las fichas en hojas según su altura real
+function layoutCards(pts, firstTop, w) {
+  var mg = newPage().g, pages = [[]], y = firstTop, bottom = PH - 28;
+  pts.forEach(function (p) {
+    var L = cardLayout(mg, p, w);
+    if (y + L.h > bottom && pages[pages.length - 1].length) { pages.push([]); y = 116; }
+    pages[pages.length - 1].push({ p: p, L: L, y: y }); y += L.h + 10;
+  });
+  return pages;
 }
 function pdfStageOf(t) { var st = tramoStage(t); return st; }
 function buildPDF(onStep) {
@@ -1586,24 +1622,13 @@ function buildPDF(onStep) {
         var lay = dimL.concat(SGp.walks.map(function (w) { return { coords: w.pts, color: 'rgba(127,227,240,.85)', width: 1.8, dash: [3, 4] }; }), [{ coords: coords, color: '#FFD200', width: 4.5 }]);
         var probe = newPage(), inf = mapPanel(probe.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, null);
         return fetchDEM(inf.bounds, inf.mpp).then(function (dem) {
-          var per1 = 7, perN = 14, pages = [x.pts.slice(0, per1)];
-          for (var i = per1; i < x.pts.length; i += perN) pages.push(x.pts.slice(i, i + perN));
+          var pages = layoutCards(x.pts, 532, 714);
           return pages.reduce(function (pp, chunk, pi) {
             return pp.then(function () {
               var Q = newPage(), sub = fmtD(len) + ' · ' + pl(x.pts.length, 'punto', 'puntos') + ' · ' + today;
               header(Q, name + (pi ? ' · continuación' : ''), sub, 'Tramo ' + (ti + 1) + ' de ' + T.length, pages.length > 1 ? 'Hoja ' + (pi + 1) + ' de ' + pages.length : '');
-              var top = 116;
-              if (pi === 0) { mapPanel(Q.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, dem); top = 532; }
-              var cw = 352, chh = 130, jobs = [];
-              chunk.forEach(function (p, k) { jobs.push(drawCard(Q.g, p, 40 + (k % 2) * (cw + 10), top + Math.floor(k / 2) * (chh + 10), cw, chh)); });
-              if (pi === 0 && chunk.length === per1) {
-                var lx = 40 + cw + 10, ly = top + 3 * (chh + 10), gq = Q.g, lastP = x.pts[x.pts.length - 1];
-                rr(gq, lx, ly, cw, chh, 16); gq.fillStyle = 'rgba(255,255,255,.05)'; gq.fill();
-                font(gq, '700', 13); gq.fillStyle = '#fff'; gq.fillText('Referencias', lx + 14, ly + 26);
-                font(gq, '500', 12); gq.fillStyle = '#D1D1D6';
-                if (lastP && lastP.toEnd != null) gq.fillText('Último punto a la llegada: ' + fmtD(lastP.toEnd), lx + 14, ly + 48);
-                [['Buena', 'Señal buena'], ['Débil', 'Señal débil'], ['Sin datos', 'Sin datos']].forEach(function (r, i) { gq.fillStyle = SIGC[r[0]]; gq.beginPath(); gq.arc(lx + 18, ly + 68 + i * 18, 4, 0, 7); gq.fill(); gq.fillStyle = '#D1D1D6'; gq.fillText(r[1], lx + 28, ly + 72 + i * 18); });
-              }
+              if (pi === 0) mapPanel(Q.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, dem);
+              var jobs = chunk.map(function (c) { return drawCard(Q.g, c.p, 40, c.y, 714, c.L); });
               return Promise.all(jobs).then(function () { add(Q); });
             });
           }, Promise.resolve());
@@ -1620,16 +1645,13 @@ function buildPDF(onStep) {
       }
       var ctx = (S.kmz ? S.kmz.stages : []).map(function (st) { return { coords: st.coords, color: 'rgba(255,210,0,.35)', width: 2.5, label: st.name }; });
       var go2 = function (dem) {
-        var per1 = geo.length ? 7 : 10, perN = 14, pages = [OFF.slice(0, per1)];
-        for (var i = per1; i < OFF.length; i += perN) pages.push(OFF.slice(i, i + perN));
+        var pages = layoutCards(OFF, geo.length ? 532 : 116, 714);
         return pages.reduce(function (pp, chunk, pi) {
           return pp.then(function () {
             var Q = newPage();
             header(Q, 'Fuera de tramo' + (pi ? ' · continuación' : ''), pl(OFF.length, 'punto', 'puntos') + ' registrados fuera de los tramos · ' + today, 'Otros puntos', pages.length > 1 ? 'Hoja ' + (pi + 1) + ' de ' + pages.length : '');
-            var top = 116;
-            if (pi === 0 && geo.length) { mapPanel(Q.g, 40, 116, 714, 402, fitO, dimL.concat(ctx), [], OFF, dem); top = 532; }
-            var cw = 352, chh = 130, jobs = [];
-            chunk.forEach(function (p, k) { jobs.push(drawCard(Q.g, p, 40 + (k % 2) * (cw + 10), top + Math.floor(k / 2) * (chh + 10), cw, chh)); });
+            if (pi === 0 && geo.length) mapPanel(Q.g, 40, 116, 714, 402, fitO, dimL.concat(ctx), [], OFF, dem);
+            var jobs = chunk.map(function (c) { return drawCard(Q.g, c.p, 40, c.y, 714, c.L); });
             return Promise.all(jobs).then(function () { add(Q); });
           });
         }, Promise.resolve());
