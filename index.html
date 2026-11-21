@@ -213,6 +213,12 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
     <div class="small muted" id="pdfMsg"></div>
   </div>
   <div class="card g" style="display:flex;flex-direction:column;gap:10px">
+    <b>Recorrido (huella)</b>
+    <div class="small muted" style="line-height:1.4">Tu recorrido limpio: los tramos y enlaces hechos en auto, separados de lo que caminaste a pie. Incluye los puntos de foto y cómo llegar a pie a cada uno. Se abre en Google Earth o My Maps y se puede volver a cargar como KMZ.</div>
+    <div style="display:flex;gap:10px"><button class="btn tint" id="kmzOut" style="flex:1">KMZ</button><button class="btn2" id="gpxOut" style="flex:1;height:52px">GPX</button></div>
+    <div class="small muted" id="routeMsg"></div>
+  </div>
+  <div class="card g" style="display:flex;flex-direction:column;gap:10px">
     <b>Nueva carrera</b>
     <div class="small muted" style="line-height:1.4">Borra todo lo de este iPhone (KMZ, fotos, notas, recorrido y banderas) para empezar una carrera de cero. Guardá el respaldo antes.</div>
     <button class="btn2" id="resetBtn" style="color:#FF6961">Nueva carrera…</button>
@@ -262,7 +268,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.6.0';
+var VERSION = '1.7.0';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1164,7 +1170,9 @@ function drawGeneral() {
   var m = mapSel();
   if (!S.kmz && !S.track.length && !m.pts.length) { g.fillStyle = '#8E8E93'; g.font = '15px -apple-system'; g.textAlign = 'center'; g.fillText('Cargá el KMZ en Tramos para ver la carrera', W / 2, H / 2); g.textAlign = 'left'; return; }
   // enlaces y recorrido: gris apagado
-  line(trackSorted(), C_LINK, 2);
+  var SG = segments();
+  SG.drives.forEach(function (d) { line(d, C_LINK, 2); });
+  SG.walks.forEach(function (w) { line(w.pts, 'rgba(127,227,240,.75)', 2, [3, 4]); });
   if (m.gen) {
     if (S.kmz) S.kmz.stages.forEach(function (st) { line(st.coords, C_STAGE, 4.5); flags(st, false); pill(st.name, st.coords[Math.floor(st.coords.length / 2)], C_STAGE); });
     m.T.forEach(function (t) { ptsOfTramo(t).forEach(function (p) { if (p.lat != null) dotN(p, 8, 10); }); });
@@ -1228,6 +1236,7 @@ document.getElementById('ptList').addEventListener('click', function (e) {
     '<div class="small muted" style="margin-top:6px">' + new Date(p.t).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + (p.signal ? ' · señal ' + p.signal : '') + (p.acc ? ' · GPS ±' + Math.round(p.acc) + ' m' : '') + (p.d != null ? ' · ' + fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : '') + '</div>' +
     '<div class="photos">' + p.photos.map(function (m) { return '<img src="' + urlOf(m) + '" alt="Foto" data-full="' + m.id + '">'; }).join('') + '</div>' +
     (function () { var a = []; p.photos.forEach(function (m) { if (m.author && a.indexOf(m.author) < 0) a.push(m.author); }); return a.length ? '<div class="small muted" style="margin-top:8px">Fotos de ' + a.map(esc).join(', ') + '</div>' : ''; })() +
+    (function () { var ac = accessOf(p); return ac ? '<div class="small" style="margin-top:8px;color:#7FE3F0">Acceso a pie: ' + fmtD(ac.len) + ' desde donde quedó el auto (' + fmtD(ac.straight) + ' en línea recta)</div>' : ''; })() +
     p.audios.map(function (m) { return '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:4px">Nota de voz · ' + (m.dur || 0) + ' s · se desgraba en la próxima etapa</div><audio controls src="' + urlOf(m) + '" style="width:100%"></audio></div>'; }).join('');
   sh.style.display = 'block'; document.getElementById('ptDim').classList.add('on');
 });
@@ -1432,6 +1441,7 @@ function drawCard(g, p, x, y, w, h) {
     if (p.signal) { g.fillStyle = sigc; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText('Señal ' + p.signal.toLowerCase(), tx + 13, y + 73); }
     var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
     var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
+    var acc = accessOf(p); if (acc) desc = 'Acceso a pie: ' + fmtD(acc.len) + ' desde el auto. ' + desc;
     font(g, '500', 12); g.fillStyle = desc ? '#F2F2F7' : '#8E8E93';
     wrap(g, desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : (authors.length ? 'Fotos de ' + authors.join(', ') : 'Sin descripción.')), tx, y + (p.signal ? 93 : 74), tw2, 15, p.signal ? 2 : 3);
   });
@@ -1451,7 +1461,8 @@ function buildPDF(onStep) {
   header(P, S.kmz ? 'Mapa general' : 'Relevamiento', (S.kmz ? stages.length + ' tramos en el KMZ · ' : '') + pl(T.length, 'tramo relevado', 'tramos relevados') + ' · ' + today, S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') : '', '');
   var fit = [].concat.apply([], stages.map(function (st) { return st.coords; })).concat(trackSorted());
   T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) fit.push(p); }); });
-  var layers = [{ coords: trackSorted(), color: 'rgba(150,150,160,.5)', width: 1.6 }].concat(stages.map(function (st) { return { coords: st.coords, color: '#FFD200', width: 3.8, label: st.name }; }));
+  var SGp = segments(), dimL = SGp.drives.map(function (d) { return { coords: d, color: 'rgba(150,150,160,.5)', width: 1.6 }; });
+  var layers = dimL.concat(stages.map(function (st) { return { coords: st.coords, color: '#FFD200', width: 3.8, label: st.name }; }));
   var allPts = []; T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) allPts.push({ lat: p.lat, lng: p.lng, n: '' }); }); });
   var gen = function (dem) { var Q = newPage(); header(Q, S.kmz ? 'Mapa general' : 'Relevamiento', (S.kmz ? stages.length + ' tramos en el KMZ · ' : '') + pl(T.length, 'tramo relevado', 'tramos relevados') + ' · ' + today, S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') : '', ''); mapPanel(Q.g, 40, 120, 714, 700, fit, layers, [], [], dem); return Q; };
   var info = mapPanel(P.g, 40, 120, 714, 700, fit, layers, [], [], null);
@@ -1476,7 +1487,7 @@ function buildPDF(onStep) {
         var fit2 = coords.concat(x.pts.filter(function (p) { return p.lat != null; }));
         if (!fit2.length) fit2 = [{ lat: 0, lng: 0 }];
         var marks = x.st ? [{ lat: x.st.start.lat, lng: x.st.start.lng, label: x.st.start.name, kind: 'start' }, { lat: x.st.end.lat, lng: x.st.end.lng, label: x.st.end.name, kind: 'end' }] : [];
-        var lay = [{ coords: trackSorted(), color: 'rgba(150,150,160,.45)', width: 1.6 }, { coords: coords, color: '#FFD200', width: 4.5 }];
+        var lay = dimL.concat(SGp.walks.map(function (w) { return { coords: w.pts, color: 'rgba(127,227,240,.85)', width: 1.8, dash: [3, 4] }; }), [{ coords: coords, color: '#FFD200', width: 4.5 }]);
         var probe = newPage(), inf = mapPanel(probe.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, null);
         return fetchDEM(inf.bounds, inf.mpp).then(function (dem) {
           var per1 = 7, perN = 14, pages = [x.pts.slice(0, per1)];
@@ -1525,6 +1536,150 @@ document.getElementById('pvShare').onclick = function () {
   if (PV.file && navigator.canShare && navigator.canShare({ files: [PV.file] })) navigator.share({ files: [PV.file], title: PV.file.name }).catch(function () {});
   else if (PV.url) window.open(PV.url, '_blank');
 };
+
+/* ---------- recorrido: auto vs a pie, limpieza y exportación ---------- */
+var SEG = null;
+function segments() {
+  if (SEG && SEG.n === S.track.length) return SEG;
+  var cl = [];
+  trackSorted().forEach(function (p) {
+    if (p.acc != null && p.acc > 35) return;
+    var l = cl[cl.length - 1];
+    if (l) { var dt = (p.t - l.t) / 1000; if (dt > 0 && hav(l, p) / dt > 70) return; } // salto imposible (>250 km/h)
+    cl.push(p);
+  });
+  var sp = cl.map(function (p, i) {
+    var j = i, k = i; while (j > 0 && p.t - cl[j - 1].t <= 10000) j--; while (k < cl.length - 1 && cl[k + 1].t - p.t <= 10000) k++;
+    var dt = (cl[k].t - cl[j].t) / 1000, d = 0; for (var m = j + 1; m <= k; m++) d += hav(cl[m - 1], cl[m]);
+    return dt > 0 ? d / dt * 3.6 : 0;
+  });
+  var runs = [], mode = 'pie', cur = null;
+  cl.forEach(function (p, i) {
+    if (mode === 'pie' && sp[i] > 14) mode = 'auto'; else if (mode === 'auto' && sp[i] < 8) mode = 'pie';
+    var gap = cur && p.t - cur.pts[cur.pts.length - 1].t > 90000;
+    if (!cur || cur.mode !== mode || gap) { cur = { mode: mode, pts: [] }; runs.push(cur); }
+    cur.pts.push(p);
+  });
+  // unir: un "a pie" muy corto entre dos tramos en auto es una frenada, no una caminata
+  runs.forEach(function (r) { r.len = 0; for (var i = 1; i < r.pts.length; i++) r.len += hav(r.pts[i - 1], r.pts[i]); });
+  var drives = [], walks = [];
+  runs.forEach(function (r) {
+    if (r.mode === 'auto') drives.push(r.pts);
+    else if (r.len > 20) walks.push({ pts: r.pts, len: r.len, t0: r.pts[0].t, t1: r.pts[r.pts.length - 1].t });
+  });
+  SEG = { n: S.track.length, drives: drives, walks: walks };
+  return SEG;
+}
+function simplify(pts, eps) {
+  if (pts.length < 3) return pts.slice();
+  var keep = new Array(pts.length); keep[0] = keep[pts.length - 1] = true;
+  (function dp(a, b) {
+    var mx = 0, idx = -1;
+    for (var i = a + 1; i < b; i++) { var d = segDist(pts[i], pts[a], pts[b]); if (d > mx) { mx = d; idx = i; } }
+    if (mx > eps) { keep[idx] = true; dp(a, idx); dp(idx, b); }
+  })(0, pts.length - 1);
+  return pts.filter(function (p, i) { return keep[i]; });
+}
+// acceso a pie de un punto: dónde quedó el auto y qué caminaste hasta la foto
+function accessOf(p) {
+  if (p.lat == null) return null;
+  var tt = p.media.map(function (m) { return m.t; }), w = null;
+  segments().walks.forEach(function (x) { if (tt.some(function (t) { return t >= x.t0 - 30000 && t <= x.t1 + 30000; })) w = w || x; });
+  if (!w) return null;
+  var park = w.pts[0], tEnd = Math.max.apply(0, tt), path = w.pts.filter(function (q) { return q.t <= tEnd + 5000; });
+  var len = 0; for (var i = 1; i < path.length; i++) len += hav(path[i - 1], path[i]);
+  var straight = hav(park, p);
+  if (straight < 25) return null;
+  return { park: park, path: path.concat([{ lat: p.lat, lng: p.lng }]), len: Math.max(len, straight), straight: straight };
+}
+function xmlEsc(t) { return String(t).replace(/[<>&'"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]; }); }
+function routeData() {
+  var T = allTramos(), seg = segments(), out = [];
+  T.forEach(function (t) {
+    var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st);
+    var mine = t.virtual ? [] : [].concat.apply([], seg.drives.map(function (d) { return d.filter(function (p) { return p.t >= t.t0 && p.t <= (t.t1 === Infinity ? Date.now() : t.t1); }); }));
+    var line = mine.length > 1 ? simplify(mine, 3) : (st ? st.coords : []);
+    var name = st ? st.name : 'PE ' + t.n;
+    var a = t.start && t.start.lat != null ? t.start : (st ? st.start : line[0]), b = t.end && t.end.lat != null ? t.end : (st ? st.end : line[line.length - 1]);
+    out.push({ t: t, st: st, name: name, line: line, a: a, b: b, pts: pts });
+  });
+  var inT = function (p) { return T.some(function (t) { return !t.virtual && p.t >= t.t0 && p.t <= t.t1; }); };
+  var links = seg.drives.map(function (d) { return simplify(d.filter(function (p) { return !inT(p); }), 4); }).filter(function (d) { return d.length > 1; });
+  return { tramos: out, links: links, walks: seg.walks };
+}
+function coordStr(list) { return list.map(function (p) { return p.lng.toFixed(6) + ',' + p.lat.toFixed(6) + ',0'; }).join(' '); }
+function buildKML() {
+  var R = routeData(), title = (S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') + ' · ' : '') + 'Ojos de Tapir ' + new Date().toLocaleDateString('es-AR');
+  var k = ['<?xml version="1.0" encoding="UTF-8"?>', '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>', '<name>' + xmlEsc(title) + '</name>',
+    '<Style id="tramo"><LineStyle><color>ff00d2ff</color><width>5</width></LineStyle></Style>',
+    '<Style id="enlace"><LineStyle><color>99a09696</color><width>2</width></LineStyle></Style>',
+    '<Style id="pie"><LineStyle><color>fff0e37f</color><width>2</width></LineStyle></Style>',
+    '<Style id="largada"><IconStyle><color>ff00d2ff</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/flag.png</href></Icon></IconStyle></Style>',
+    '<Style id="llegada"><IconStyle><color>ff000000</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/flag.png</href></Icon></IconStyle></Style>',
+    '<Style id="foto"><IconStyle><color>ffffffff</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon></IconStyle></Style>',
+    '<Style id="auto"><IconStyle><color>ffd8c000</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/parking_lot.png</href></Icon></IconStyle></Style>'];
+  k.push('<Folder><name>Tramos</name>');
+  R.tramos.forEach(function (x) {
+    if (x.line.length > 1) k.push('<Placemark><name>' + xmlEsc(x.name) + '</name><styleUrl>#tramo</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(x.line) + '</coordinates></LineString></Placemark>');
+    if (x.a) k.push('<Placemark><name>L' + xmlEsc(x.name) + '</name><styleUrl>#largada</styleUrl><Point><coordinates>' + coordStr([x.a]) + '</coordinates></Point></Placemark>');
+    if (x.b) k.push('<Placemark><name>F' + xmlEsc(x.name) + '</name><styleUrl>#llegada</styleUrl><Point><coordinates>' + coordStr([x.b]) + '</coordinates></Point></Placemark>');
+  });
+  k.push('</Folder><Folder><name>Puntos de foto</name>');
+  R.tramos.forEach(function (x) {
+    x.pts.forEach(function (p) {
+      if (p.lat == null) return;
+      var ac = accessOf(p), d = [];
+      if (p.d != null) d.push(fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from));
+      if (p.toEnd != null && p === x.pts[x.pts.length - 1]) d.push(fmtD(p.toEnd) + ' a la llegada');
+      d.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ', ' + pl(p.audios.length, 'nota', 'notas') : ''));
+      if (p.signal) d.push('Señal ' + p.signal.toLowerCase());
+      if (ac) d.push('Acceso a pie: ' + fmtD(ac.len) + ' desde donde quedó el auto');
+      var sum = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' '); if (sum) d.push(sum);
+      k.push('<Placemark><name>' + xmlEsc(x.name + ' · P' + p.n) + '</name><description>' + xmlEsc(d.join(' · ')) + '</description><styleUrl>#foto</styleUrl><Point><coordinates>' + coordStr([p]) + '</coordinates></Point></Placemark>');
+      if (ac) {
+        k.push('<Placemark><name>' + xmlEsc('Acceso a pie a P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#pie</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(simplify(ac.path, 2)) + '</coordinates></LineString></Placemark>');
+        k.push('<Placemark><name>' + xmlEsc('Auto para P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#auto</styleUrl><Point><coordinates>' + coordStr([ac.park]) + '</coordinates></Point></Placemark>');
+      }
+    });
+  });
+  k.push('</Folder><Folder><name>Enlaces</name>');
+  R.links.forEach(function (l, i) { k.push('<Placemark><name>Enlace ' + (i + 1) + '</name><styleUrl>#enlace</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(l) + '</coordinates></LineString></Placemark>'); });
+  k.push('</Folder></Document></kml>');
+  return k.join('\n');
+}
+function buildGPX() {
+  var R = routeData(), g = ['<?xml version="1.0" encoding="UTF-8"?>', '<gpx version="1.1" creator="Ojos de Tapir" xmlns="http://www.topografix.com/GPX/1/1">'];
+  function wpt(p, name, desc) { g.push('<wpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lng.toFixed(6) + '"><name>' + xmlEsc(name) + '</name>' + (desc ? '<desc>' + xmlEsc(desc) + '</desc>' : '') + '</wpt>'); }
+  R.tramos.forEach(function (x) {
+    if (x.a) wpt(x.a, 'L' + x.name); if (x.b) wpt(x.b, 'F' + x.name);
+    x.pts.forEach(function (p) { if (p.lat != null) wpt(p, x.name + ' · P' + p.n, p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : ''); });
+  });
+  function trk(name, pts) { g.push('<trk><name>' + xmlEsc(name) + '</name><trkseg>' + pts.map(function (p) { return '<trkpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lng.toFixed(6) + '">' + (p.t ? '<time>' + new Date(p.t).toISOString() + '</time>' : '') + '</trkpt>'; }).join('') + '</trkseg></trk>'); }
+  R.tramos.forEach(function (x) { if (x.line.length > 1) trk(x.name, x.line); });
+  R.links.forEach(function (l, i) { trk('Enlace ' + (i + 1), l); });
+  g.push('</gpx>');
+  return g.join('\n');
+}
+function shareOrDownload(file, msgEl) {
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: file.name }).catch(function () {}); return; }
+  var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+}
+function routeName(ext) { return 'huella_' + (S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '').replace(/[^\w\-]+/g, '_') + '_' : '') + new Date().toISOString().slice(0, 10) + '.' + ext; }
+function routeSummary() { var R = routeData(), np = R.tramos.reduce(function (s, x) { return s + x.pts.length; }, 0), na = 0; R.tramos.forEach(function (x) { x.pts.forEach(function (p) { if (accessOf(p)) na++; }); }); return pl(R.tramos.length, 'tramo', 'tramos') + ', ' + pl(R.links.length, 'enlace', 'enlaces') + ', ' + pl(np, 'punto', 'puntos') + ' de foto, ' + pl(na, 'acceso', 'accesos') + ' a pie'; }
+document.getElementById('kmzOut').onclick = function () {
+  var msg = document.getElementById('routeMsg');
+  try {
+    var kml = buildKML(), zip = makeZip([{ name: 'doc.kml', data: new TextEncoder().encode(kml) }]);
+    shareOrDownload(new File([zip], routeName('kmz'), { type: 'application/vnd.google-earth.kmz' }), msg);
+    msg.textContent = 'KMZ con ' + routeSummary() + '.';
+  } catch (e) { msg.textContent = 'No se pudo armar el KMZ.'; }
+};
+document.getElementById('gpxOut').onclick = function () {
+  var msg = document.getElementById('routeMsg');
+  try { shareOrDownload(new File([buildGPX()], routeName('gpx'), { type: 'application/gpx+xml' }), msg); msg.textContent = 'GPX con ' + routeSummary() + '.'; }
+  catch (e) { msg.textContent = 'No se pudo armar el GPX.'; }
+};
+
 /* ---------- nueva carrera (reset) ---------- */
 document.getElementById('resetBtn').onclick = function () {
   var ph = S.media.filter(function (m) { return m.type === 'photo'; }).length, au = S.media.filter(function (m) { return m.type === 'audio'; }).length;
