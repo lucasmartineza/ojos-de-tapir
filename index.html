@@ -236,6 +236,10 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
     <button class="btn tint" id="pdfBtn">Crear mapa PDF</button>
     <div class="small muted" id="pdfMsg"></div>
   </div>
+  <details class="card g" id="cfgCard"><summary style="font-weight:700">Ajustes avanzados</summary>
+    <div class="small muted" style="margin:8px 0;line-height:1.4">Dirección del servicio que desgraba las notas de voz. Normalmente no hace falta tocarla.</div>
+    <input id="cfgUrl" placeholder="https://…workers.dev" style="width:100%;background:rgba(255,255,255,.08);border:0;border-radius:12px;color:#fff;font:14px -apple-system;padding:10px">
+  </details>
   <div class="card g" style="display:flex;flex-direction:column;gap:10px">
     <b>Nueva carrera</b>
     <div class="small muted" style="line-height:1.4">Borra todo lo de este iPhone (KMZ, fotos, notas, recorrido y banderas) para empezar una carrera de cero. Guardá el respaldo antes.</div>
@@ -286,7 +290,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.8.0';
+var VERSION = '1.9.0';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -638,7 +642,7 @@ function startRec() {
     mr.onstop = function () {
       s.getTracks().forEach(function (t) { t.stop(); });
       var b = new Blob(chunks, { type: mr.mimeType || mime || 'audio/mp4' });
-      if (b.size) newMedia('audio', b, { dur: Math.round((Date.now() - REC.t0) / 1000), transcribed: false });
+      if (b.size) newMedia('audio', b, { dur: Math.round((Date.now() - REC.t0) / 1000), transcribed: false }).then(function () { setTimeout(function () { TR.run(false); }, 1500); });
     };
     var AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), an = ac.createAnalyser();
     an.fftSize = 64; ac.createMediaStreamSource(s).connect(an);
@@ -1111,7 +1115,7 @@ function renderTramos() {
   var aud = S.media.filter(function (m) { return m.type === 'audio' && !m.transcribed; }).length;
   document.getElementById('trInfo').innerHTML =
     '<div style="display:flex;gap:10px;align-items:center"><span style="color:#34C759">' + svgI('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>', 20, 2) + '</span>Guardado en el iPhone · ' + pl(S.media.filter(function (m) { return m.type === 'photo'; }).length, 'foto', 'fotos') + ', ' + pl(S.media.filter(function (m) { return m.type === 'audio'; }).length, 'nota', 'notas') + ', ' + S.track.length + ' posiciones GPS</div>' +
-    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#FF9F0A">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 20, 2) + '</span>' + pl(aud, 'nota', 'notas') + ' de voz por desgrabar (próxima etapa)</div>';
+    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#FF9F0A">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 20, 2) + '</span>' + (aud ? pl(aud, 'nota', 'notas') + ' de voz por desgrabar' + (TR.url() ? (navigator.onLine ? '' : ' (cuando haya señal)') : ' (falta configurar el servicio)') : 'Todas las notas de voz están desgrabadas') + (aud && TR.url() ? ' <button class="btn2" id="trNow" style="width:auto;padding:0 12px;height:30px;font-size:12px;display:inline-flex;margin-left:6px">Desgrabar ahora</button>' : '') + '</div>';
 }
 document.getElementById('trList').addEventListener('click', function (e) {
   var a = e.target.closest('[data-adj]'), s = e.target.closest('[data-see]');
@@ -1141,7 +1145,7 @@ function renderPuntos() {
     var th = p.photos[0] ? '<img src="' + urlOf(p.photos[0]) + '" alt="" style="width:60px;height:45px;border-radius:8px;object-fit:cover;display:block">' : '<span style="width:60px;height:45px;border-radius:8px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 18, 2) + '</span>';
     var fin = (i === pts.length - 1 && p.toEnd != null) ? ' · ' + fmtD(p.toEnd) + ' a la llegada' : '';
     return '<button class="row" style="width:100%;text-align:left" data-pt="' + i + '"><span style="width:26px;height:26px;border-radius:13px;background:#fff;color:#000;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">' + p.n + '</span>' + th +
-      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">' + (p.d != null ? fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : 'Punto ' + p.n) + '</span><span class="small muted">' + pl(p.photos.length, 'foto', 'fotos') + ' · ' + pl(p.audios.length, 'nota', 'notas') + fin + (p.lat == null ? ' · sin GPS' : '') + '</span></span>' +
+      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">' + (p.d != null ? fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : 'Punto ' + p.n) + '</span>' + (iconsOf(p).length ? '<span style="display:flex;gap:6px;color:#D1D1D6">' + iconsOf(p).map(function (k) { return svgI(ICONOS[k][1], 16, 2); }).join('') + '</span>' : '') + '<span class="small muted">' + pl(p.photos.length, 'foto', 'fotos') + ' · ' + pl(p.audios.length, 'nota', 'notas') + fin + (p.lat == null ? ' · sin GPS' : '') + '</span></span>' +
       '<span class="small" style="display:inline-flex;align-items:center;gap:4px;font-weight:600">' + sigDot(p.signal) + '</span></button>';
   }).join('') : '<div class="row muted">Sin puntos en este tramo.</div>';
   PT.pts = pts; PT.tr = tr;
@@ -1260,7 +1264,13 @@ document.getElementById('ptList').addEventListener('click', function (e) {
     '<div class="photos">' + p.photos.map(function (m) { return '<img src="' + urlOf(m) + '" alt="Foto" data-full="' + m.id + '">'; }).join('') + '</div>' +
     (function () { var a = []; p.photos.forEach(function (m) { if (m.author && a.indexOf(m.author) < 0) a.push(m.author); }); return a.length ? '<div class="small muted" style="margin-top:8px">Fotos de ' + a.map(esc).join(', ') + '</div>' : ''; })() +
     (function () { var ac = accessOf(p); return ac ? '<div class="small" style="margin-top:8px;color:#7FE3F0">Acceso a pie: ' + fmtD(ac.len) + ' desde donde quedó el auto (' + fmtD(ac.straight) + ' en línea recta)</div>' : ''; })() +
-    p.audios.map(function (m) { return '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:4px">Nota de voz · ' + (m.dur || 0) + ' s · se desgraba en la próxima etapa</div><audio controls src="' + urlOf(m) + '" style="width:100%"></audio></div>'; }).join('');
+    (function () { var ic = iconsOf(p); return ic.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">' + ic.map(iconChip).join('') + '</div>' : ''; })() +
+    p.audios.map(function (m) {
+      var st = m.transcribed ? '' : (m.trErr ? ' · no se pudo desgrabar' : ' · pendiente de desgrabar');
+      return '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:4px">Nota de voz · ' + (m.dur || 0) + ' s' + st + '</div><audio controls src="' + urlOf(m) + '" style="width:100%"></audio>' +
+        (m.transcribed ? '<label class="small muted" style="display:block;margin-top:8px">Resumen (lo podés corregir)</label><textarea data-sum="' + m.id + '" rows="3" style="width:100%;margin-top:4px;background:rgba(255,255,255,.08);border:0;border-radius:12px;color:#fff;font:15px -apple-system;padding:10px;resize:vertical">' + esc(m.summary || '') + '</textarea>' +
+          (m.text ? '<details style="margin-top:6px"><summary class="small" style="color:var(--accent-soft)">Lo que dijiste</summary><div class="small muted" style="margin-top:4px;line-height:1.45">' + esc(m.text) + '</div></details>' : '') : '') + '</div>';
+    }).join('');
   sh.style.display = 'block'; document.getElementById('ptDim').classList.add('on');
 });
 function closeSheet() { document.getElementById('ptSheet').style.display = 'none'; document.getElementById('ptDim').classList.remove('on'); }
@@ -1270,6 +1280,11 @@ document.getElementById('ptSheet').addEventListener('click', function (e) {
   var im = e.target.closest('[data-full]'); if (im) { var v = document.getElementById('viewer'); v.querySelector('img').src = im.src; v.classList.add('on'); }
 });
 document.getElementById('viewer').onclick = function () { this.classList.remove('on'); };
+document.getElementById('ptSheet').addEventListener('change', function (e) {
+  var t = e.target.closest('[data-sum]'); if (!t) return;
+  var m = S.media.filter(function (x) { return x.id === t.dataset.sum; })[0]; if (!m) return;
+  m.summary = t.value.trim(); m.edited = true; DB.put('media', m).then(function () { toast('Resumen guardado'); });
+});
 
 /* ---------- EXPORTAR: respaldo .zip ---------- */
 var CRC = (function () { var t = []; for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -1293,7 +1308,9 @@ function makeZip(files) {
   e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
   return new Blob(parts.concat(central, [e.buffer]), { type: 'application/zip' });
 }
+document.getElementById('cfgUrl').addEventListener('change', function () { try { localStorage.setItem('ht-tr-url', this.value.trim()); } catch (e) {} toast('Guardado'); TR.run(true); });
 function renderExport() {
+  document.getElementById('cfgUrl').value = TR.url();
   var ph = S.media.filter(function (m) { return m.type === 'photo'; }), au = S.media.filter(function (m) { return m.type === 'audio'; });
   var mb = S.media.reduce(function (s, m) { return s + (m.blob ? m.blob.size : 0); }, 0) / 1048576;
   document.getElementById('exSum').innerHTML = '<b>' + allTramos().length + ' tramos</b> · ' + pl(ph.length, 'foto', 'fotos') + ' · ' + pl(au.length, 'nota', 'notas') + ' de voz · ' + S.track.length + ' posiciones GPS<br><span class="muted small">Peso aproximado: ' + mb.toFixed(1).replace('.', ',') + ' MB</span>';
@@ -1464,9 +1481,15 @@ function drawCard(g, p, x, y, w, h) {
     if (p.signal) { g.fillStyle = sigc; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText('Señal ' + p.signal.toLowerCase(), tx + 13, y + 73); }
     var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
     var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
+    var ics = iconsOf(p).map(function (k) { return ICONOS[k][0]; });
+    if (ics.length) {
+      var cx = tx, cy = y + (p.signal ? 80 : 62); font(g, '600', 10.5);
+      ics.slice(0, 4).forEach(function (t) { var w2 = g.measureText(t).width + 14; if (cx + w2 > x + w - 10) return; g.fillStyle = 'rgba(255,255,255,.14)'; rr(g, cx, cy, w2, 17, 8.5); g.fill(); g.fillStyle = '#fff'; g.fillText(t, cx + 7, cy + 12); cx += w2 + 5; });
+    }
     var acc = accessOf(p); if (acc) desc = 'Acceso a pie: ' + fmtD(acc.len) + ' desde el auto. ' + desc;
     font(g, '500', 12); g.fillStyle = desc ? '#F2F2F7' : '#8E8E93';
-    wrap(g, desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : (authors.length ? 'Fotos de ' + authors.join(', ') : 'Sin descripción.')), tx, y + (p.signal ? 93 : 74), tw2, 15, p.signal ? 2 : 3);
+    var ty0 = y + (p.signal ? 93 : 74) + (ics.length ? 18 : 0);
+    wrap(g, desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : (authors.length ? 'Fotos de ' + authors.join(', ') : 'Sin descripción.')), tx, ty0, tw2, 15, Math.max(1, Math.floor((y + h - 10 - ty0) / 15) + 1));
   });
 }
 function pdfStageOf(t) { var st = tramoStage(t); return st; }
@@ -1791,6 +1814,58 @@ document.getElementById('recList').addEventListener('click', function (e) {
   t.oncomplete = function () { S.recs = S.recs.filter(function (x) { return x.id !== id; }); S.track = S.track.filter(function (p) { return p.rec !== id; }); SEG = null; cumCache = null; renderRec(); toast('Tramo grabado borrado'); };
 });
 
+
+/* ---------- desgrabación de notas de voz (vía intermediario) ---------- */
+var TRANSCRIBE_URL = ''; // se completa con la dirección del Worker de Cloudflare
+var ICONOS = {
+  curva_izquierda: ['Curva izq.', '<path d="M17 20V12a5 5 0 0 0-5-5H6"/><path d="M9 4 6 7l3 3"/>'],
+  curva_derecha: ['Curva der.', '<path d="M7 20V12a5 5 0 0 1 5-5h6"/><path d="m15 4 3 3-3 3"/>'],
+  horquilla: ['Horquilla', '<path d="M8 20V9a4 4 0 0 1 8 0v11"/><path d="m13 17 3 3 3-3"/>'],
+  lomo: ['Lomo', '<path d="M2 18h3c3 0 4-8 7-8s4 8 7 8h3"/>'],
+  salto: ['Salto', '<path d="M2 18h6l3-5 3 1 3-6"/><path d="m15 5 2 3 3-1"/>'],
+  puente: ['Puente', '<path d="M3 10h18M5 10v8M19 10v8M3 18h18"/><path d="M5 14q7-6 14 0"/>'],
+  vado: ['Vado', '<path d="M3 10q2.25-2.5 4.5 0t4.5 0 4.5 0 4.5 0M3 16q2.25-2.5 4.5 0t4.5 0 4.5 0 4.5 0"/>'],
+  charco: ['Charco', '<ellipse cx="12" cy="15" rx="9" ry="4"/><path d="M12 4c-2 3-3 4.5-3 6a3 3 0 0 0 6 0c0-1.5-1-3-3-6z"/>'],
+  guadal: ['Guadal', '<circle cx="6" cy="14" r="2"/><circle cx="12" cy="10" r="3"/><circle cx="18" cy="15" r="2.5"/><path d="M3 20h18"/>'],
+  piedras: ['Piedras', '<path d="M3 18l3-5 4 1 2-4 4 2 3 6z"/>'],
+  buen_fondo: ['Buen fondo', '<path d="m3 19 6-9 4 5 3-4 5 8z"/>'],
+  contraluz: ['Contraluz', '<circle cx="12" cy="8" r="3"/><path d="M12 2v1M5 8H4M20 8h-1M7 3.5l.7.7M17 3.5l-.7.7"/><path d="M4 20h16M8 20l4-6 4 6"/>'],
+  luz_a_favor: ['Luz a favor', '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'],
+  publico: ['Público', '<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-3 3-5 6-5s6 2 6 5M10 20c0-3 3-5 6-5s6 2 6 5"/>'],
+  precaucion: ['Precaución', '<path d="M12 3 2 20h20z"/><path d="M12 9v5M12 17h.01"/>']
+};
+function iconsOf(p) { var out = []; p.media.forEach(function (m) { (m.icons || []).forEach(function (k) { if (ICONOS[k] && out.indexOf(k) < 0) out.push(k); }); }); return out; }
+function iconChip(k) { return '<span style="height:28px;border-radius:14px;padding:0 10px 0 7px;background:rgba(255,255,255,.14);display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600">' + svgI(ICONOS[k][1], 16, 2) + ICONOS[k][0] + '</span>'; }
+var TR = {
+  busy: false,
+  url: function () { var u = ''; try { u = localStorage.getItem('ht-tr-url') || ''; } catch (e) {} return u || TRANSCRIBE_URL; },
+  device: function () { var d = ''; try { d = localStorage.getItem('ht-dev') || ''; if (!d) { d = uid(); localStorage.setItem('ht-dev', d); } } catch (e) { d = 'anon'; } return d; },
+  run: function (manual) {
+    var url = TR.url(); if (!url || TR.busy || !navigator.onLine) { if (manual && !navigator.onLine) toast('Sin señal: se desgraba cuando haya conexión'); return; }
+    var queue = S.media.filter(function (m) { return m.type === 'audio' && !m.transcribed && (manual || !m.trErr || Date.now() - m.trErr > 600000); }).sort(function (a, b) { return a.t - b.t; });
+    if (!queue.length) { if (manual) toast('No hay notas pendientes'); return; }
+    TR.busy = true; var done = 0;
+    if (manual) toast('Desgrabando ' + pl(queue.length, 'nota', 'notas') + '…', 3000);
+    queue.reduce(function (pr, m) {
+      return pr.then(function () {
+        var fd = new FormData(), ext = /webm/.test(m.mime) ? 'webm' : 'm4a';
+        fd.append('audio', new File([m.blob], 'nota.' + ext, { type: m.mime || 'audio/mp4' })); fd.append('device', TR.device());
+        return fetch(url, { method: 'POST', body: fd }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Error'); return j; }); }).then(function (j) {
+          m.text = j.texto || ''; if (!m.edited) m.summary = j.resumen || ''; m.icons = j.iconos || []; m.transcribed = true; delete m.trErr; done++;
+          return DB.put('media', m);
+        }).catch(function () { m.trErr = Date.now(); });
+      });
+    }, Promise.resolve()).then(function () {
+      TR.busy = false;
+      if (done) toast(pl(done, 'nota desgrabada', 'notas desgrabadas'), 3000);
+      if (cur === 'tramos') renderTramos(); if (cur === 'puntos') renderPuntos();
+    });
+  }
+};
+document.addEventListener('click', function (e) { if (e.target.closest('#trNow')) TR.run(true); });
+window.addEventListener('online', function () { setTimeout(function () { TR.run(false); }, 3000); });
+setInterval(function () { TR.run(false); }, 90000);
+
 /* ---------- nueva carrera (reset) ---------- */
 document.getElementById('resetBtn').onclick = function () {
   var ph = S.media.filter(function (m) { return m.type === 'photo'; }).length, au = S.media.filter(function (m) { return m.type === 'audio'; }).length;
@@ -1836,6 +1911,7 @@ DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   startGPS(); measureSignal(); setInterval(function () { measureSignal().then(function () { if (cur === 'camara') renderCam(); }); }, 20000);
   go(openTramo() ? 'camara' : 'inicio');
+  setTimeout(function () { TR.run(false); }, 4000);
 }).catch(function () { toast('No se pudo abrir el almacenamiento del iPhone', 6000); go('inicio'); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 window.addEventListener('online', function () { measureSignal(); });
