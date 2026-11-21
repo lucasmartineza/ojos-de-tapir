@@ -44,7 +44,12 @@ h1{margin:0;font-size:34px;font-weight:700;letter-spacing:-.5px}
 .chip.on{background:rgba(0,192,216,.3);border:.5px solid rgba(127,227,240,.6)}
 /* tab bar */
 #tabs{position:fixed;left:16px;right:16px;bottom:calc(var(--sab) + 10px);height:64px;border-radius:32px;display:flex;align-items:center;justify-content:space-around;padding:0 4px;z-index:20}
-#tabs button{display:flex;flex-direction:column;align-items:center;gap:2px;width:64px;padding:6px 0;border-radius:26px;font-size:10px;font-weight:600}
+#tabs button{display:flex;flex-direction:column;align-items:center;gap:2px;width:56px;padding:6px 0;border-radius:26px;font-size:9.5px;font-weight:600}
+#tabs button[data-v=recorrido]{color:#FF6961}#tabs button[data-v=recorrido].on{color:#FF6961}
+.recbig{width:120px;height:120px;border-radius:60px;border:5px solid #fff;display:flex;align-items:center;justify-content:center;margin:0 auto}
+.recbig span{width:92px;height:92px;border-radius:46px;background:#FF453A;transition:all .2s}
+.recbig.on span{width:44px;height:44px;border-radius:10px}
+@keyframes blink{50%{opacity:.25}}.blink{animation:blink 1.2s infinite}
 #tabs button.on{background:rgba(255,255,255,.14);color:var(--accent)}
 /* camera */
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111}
@@ -166,6 +171,25 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
   </div>
 </section>
 
+<!-- RECORRIDO -->
+<section class="view" id="v-recorrido">
+  <h1>Recorrido</h1><p class="sub">Grabá la huella de cada tramo: Iniciar al llegar a la largada y Stop en la llegada. Lo ideal es que lo haga quien maneja o acompaña, mientras vos sacás fotos.</p>
+  <div class="card g" style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 16px">
+    <div id="recState" style="font-size:15px;font-weight:700;color:#D1D1D6">Sin grabar</div>
+    <button class="recbig" id="recBtn" aria-label="Iniciar grabación"><span></span></button>
+    <div id="recHint" class="small muted" style="text-align:center">Tocá para empezar a grabar</div>
+    <div id="recStats" style="display:none;width:100%;gap:8px"></div>
+    <canvas id="recMap" style="display:none;width:100%;height:180px;border-radius:16px;background:#000"></canvas>
+  </div>
+  <div class="list g" id="recList"></div>
+  <div class="card g" style="display:flex;flex-direction:column;gap:10px">
+    <b>Exportar la huella</b>
+    <div class="small muted" style="line-height:1.4">Cada grabación es un tramo, limpio de lo que caminaste a pie. El KMZ se abre en Google Earth o My Maps y se carga en Ojos de Tapir (Tramos → KMZ) como si fuera el de la organización.</div>
+    <div style="display:flex;gap:10px"><button class="btn tint" id="kmzOut" style="flex:1">KMZ</button><button class="btn2" id="gpxOut" style="flex:1;height:52px">GPX</button></div>
+    <div class="small muted" id="routeMsg"></div>
+  </div>
+</section>
+
 <!-- TRAMOS -->
 <section class="view" id="v-tramos">
   <h1>Tramos</h1><p class="sub" id="trSub"></p>
@@ -211,12 +235,6 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
     <div class="small muted" style="line-height:1.4">Una hoja con el mapa general y una hoja por tramo, con el mapa, la topografía y la ficha de cada punto. Para las curvas de nivel hace falta señal.</div>
     <button class="btn tint" id="pdfBtn">Crear mapa PDF</button>
     <div class="small muted" id="pdfMsg"></div>
-  </div>
-  <div class="card g" style="display:flex;flex-direction:column;gap:10px">
-    <b>Recorrido (huella)</b>
-    <div class="small muted" style="line-height:1.4">Tu recorrido limpio: los tramos y enlaces hechos en auto, separados de lo que caminaste a pie. Incluye los puntos de foto y cómo llegar a pie a cada uno. Se abre en Google Earth o My Maps y se puede volver a cargar como KMZ.</div>
-    <div style="display:flex;gap:10px"><button class="btn tint" id="kmzOut" style="flex:1">KMZ</button><button class="btn2" id="gpxOut" style="flex:1;height:52px">GPX</button></div>
-    <div class="small muted" id="routeMsg"></div>
   </div>
   <div class="card g" style="display:flex;flex-direction:column;gap:10px">
     <b>Nueva carrera</b>
@@ -268,7 +286,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.7.0';
+var VERSION = '1.8.0';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -277,7 +295,8 @@ var IC = {
   camara: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   tramos: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   puntos: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
-  exportar: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v6h14v-6"/>'
+  exportar: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v6h14v-6"/>',
+  recorrido: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5" fill="currentColor"/>'
 };
 function svgI(p, s, w) { return '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
 function whiteFlag(s) { s = s || 24; return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M6 4h12l-2.5 4.5L18 13H6z" fill="#fff"/></svg>'; }
@@ -309,7 +328,7 @@ var DB = {
   db: null,
   open: function () {
     return new Promise(function (res, rej) {
-      var r = indexedDB.open('ojos-de-tapir', 2);
+      var r = indexedDB.open('ojos-de-tapir', 3);
       r.onupgradeneeded = function (e) {
         var d = r.result;
         if (e.oldVersion < 1) {
@@ -318,6 +337,7 @@ var DB = {
           d.createObjectStore('flags', { keyPath: 'id' });
         }
         if (e.oldVersion < 2) d.createObjectStore('kmz', { keyPath: 'id' });
+        if (e.oldVersion < 3) d.createObjectStore('recs', { keyPath: 'id' });
       };
       r.onsuccess = function () { DB.db = r.result; res(); };
       r.onerror = function () { rej(r.error); };
@@ -336,7 +356,7 @@ var DB = {
     return new Promise(function (res, rej) { var r = DB.db.transaction(store, 'readonly').objectStore(store).getAll(); r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; });
   }
 };
-var S = { track: [], media: [], flags: [], kmz: null };
+var S = { track: [], media: [], flags: [], kmz: null, recs: [] };
 
 /* ---------- GPS y recorrido ---------- */
 var GPS = { fix: null, watch: null, last: null };
@@ -345,15 +365,17 @@ function startGPS() {
   GPS.watch = navigator.geolocation.watchPosition(function (p) {
     var f = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() };
     GPS.fix = f;
-    if (f.acc <= 60) {
+    var rc = recActive();
+    if (rc && f.acc <= 60) {
       var L = GPS.last;
       if (!L || hav(L, f) >= 5 || f.t - L.t >= 15000) {
-        GPS.last = f;
+        f.rec = rc.id; f.id = uid(); GPS.last = f;
         S.track.push(f);
         DB.put('track', f).catch(function () {});
       }
     }
     if (cur === 'camara') renderCam();
+    if (cur === 'recorrido') renderRec();
   }, function (e) {
     if (e.code === 1) toast('Activá la ubicación para Ojos de Tapir en Ajustes', 5000);
   }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
@@ -493,7 +515,7 @@ function pointDistances(tr, pts, st) {
 function tramoLen(tr) { if (tr.virtual) return tr.stage.len; if (!tr.start) return null; var a0 = alongAt(tr.start.t), a1 = alongAt(tr.end ? tr.end.t : Date.now()); return (a0 != null && a1 != null) ? a1 - a0 : null; }
 
 /* ---------- navegación ---------- */
-var TABS = [['inicio', 'Inicio'], ['camara', 'Cámara'], ['tramos', 'Tramos'], ['puntos', 'Puntos'], ['exportar', 'Exportar']];
+var TABS = [['inicio', 'Inicio'], ['camara', 'Cámara'], ['recorrido', 'Rec'], ['tramos', 'Tramos'], ['puntos', 'Puntos'], ['exportar', 'Exportar']];
 var cur = null;
 function go(v) {
   if (v === cur) return;
@@ -506,6 +528,7 @@ function go(v) {
   if (v === 'tramos') renderTramos();
   if (v === 'puntos') renderPuntos();
   if (v === 'exportar') renderExport();
+  if (v === 'recorrido') renderRec();
   wake();
 }
 document.getElementById('tabs').innerHTML = TABS.map(function (t) { return '<button data-v="' + t[0] + '">' + svgI(IC[t[0]], 22, 1.8) + t[1] + '</button>'; }).join('');
@@ -515,7 +538,7 @@ document.addEventListener('click', function (e) { var b = e.target.closest('[dat
 /* ---------- pantalla encendida ---------- */
 var WL = null;
 function wake() {
-  var need = cur === 'camara' || !!openTramo();
+  var need = cur === 'camara' || !!openTramo() || !!recActive();
   if (need && !WL && navigator.wakeLock && document.visibilityState === 'visible') {
     navigator.wakeLock.request('screen').then(function (l) { WL = l; l.addEventListener('release', function () { WL = null; }); }).catch(function () {});
   } else if (!need && WL) { WL.release(); WL = null; }
@@ -645,7 +668,7 @@ document.getElementById('mic').onclick = function () { if (REC.on) stopRec(); el
 function renderCam() {
   var tr = openTramo(), f = GPS.fix;
   var gpsTxt = f ? '<span class="dot" style="background:' + (f.acc <= 15 ? '#34C759' : f.acc <= 40 ? '#FFD60A' : '#FF9F0A') + '"></span>±' + Math.round(f.acc) + ' m' : '<span class="dot" style="background:#FF453A"></span>Sin GPS';
-  document.getElementById('pillL').textContent = tr ? 'Tramo ' + tr.n : 'Sin tramo iniciado';
+  document.getElementById('pillL').innerHTML = (recActive() ? '<span class="blink" style="color:#FF453A">●</span> ' : '') + (tr ? 'Tramo ' + tr.n : 'Sin tramo iniciado');
   var a0 = tr ? alongAt(tr.start.t) : null, an = alongAt(Date.now());
   document.getElementById('pillR').innerHTML = tr ? '<span style="font-weight:500;font-variant-numeric:tabular-nums">' + fmtKm(a0 != null && an != null ? an - a0 : 0) + '</span>' : gpsTxt;
   document.getElementById('flagBtn').innerHTML = tr ? checkerFlag(24) : whiteFlag(24);
@@ -1593,19 +1616,22 @@ function accessOf(p) {
   return { park: park, path: path.concat([{ lat: p.lat, lng: p.lng }]), len: Math.max(len, straight), straight: straight };
 }
 function xmlEsc(t) { return String(t).replace(/[<>&'"]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]; }); }
-function routeData() {
-  var T = allTramos(), seg = segments(), out = [];
-  T.forEach(function (t) {
-    var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st);
-    var mine = t.virtual ? [] : [].concat.apply([], seg.drives.map(function (d) { return d.filter(function (p) { return p.t >= t.t0 && p.t <= (t.t1 === Infinity ? Date.now() : t.t1); }); }));
-    var line = mine.length > 1 ? simplify(mine, 3) : (st ? st.coords : []);
-    var name = st ? st.name : 'PE ' + t.n;
-    var a = t.start && t.start.lat != null ? t.start : (st ? st.start : line[0]), b = t.end && t.end.lat != null ? t.end : (st ? st.end : line[line.length - 1]);
-    out.push({ t: t, st: st, name: name, line: line, a: a, b: b, pts: pts });
+function recLines() {
+  var seg = segments();
+  return S.recs.slice().sort(function (a, b) { return a.t0 - b.t0; }).map(function (r) {
+    var t1 = r.t1 || Date.now(), inR = function (p) { return p.t >= r.t0 && p.t <= t1; };
+    var drv = [].concat.apply([], seg.drives.map(function (d) { return d.filter(inR); }));
+    var all = trackSorted().filter(inR);
+    var line = drv.length > 1 ? simplify(drv, 3) : simplify(all, 3);
+    var walks = seg.walks.filter(function (w) { return w.t1 >= r.t0 && w.t0 <= t1; });
+    var len = 0; for (var i = 1; i < line.length; i++) len += hav(line[i - 1], line[i]);
+    return { r: r, name: r.name, line: line, a: line[0], b: line[line.length - 1], walks: walks, len: len };
   });
-  var inT = function (p) { return T.some(function (t) { return !t.virtual && p.t >= t.t0 && p.t <= t.t1; }); };
-  var links = seg.drives.map(function (d) { return simplify(d.filter(function (p) { return !inT(p); }), 4); }).filter(function (d) { return d.length > 1; });
-  return { tramos: out, links: links, walks: seg.walks };
+}
+function routeData() {
+  var T = allTramos(), photos = [];
+  T.forEach(function (t) { var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st); photos.push({ name: st ? st.name : 'Tramo ' + t.n, pts: pts }); });
+  return { tramos: recLines(), photos: photos };
 }
 function coordStr(list) { return list.map(function (p) { return p.lng.toFixed(6) + ',' + p.lat.toFixed(6) + ',0'; }).join(' '); }
 function buildKML() {
@@ -1620,43 +1646,49 @@ function buildKML() {
     '<Style id="auto"><IconStyle><color>ffd8c000</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/parking_lot.png</href></Icon></IconStyle></Style>'];
   k.push('<Folder><name>Tramos</name>');
   R.tramos.forEach(function (x) {
-    if (x.line.length > 1) k.push('<Placemark><name>' + xmlEsc(x.name) + '</name><styleUrl>#tramo</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(x.line) + '</coordinates></LineString></Placemark>');
-    if (x.a) k.push('<Placemark><name>L' + xmlEsc(x.name) + '</name><styleUrl>#largada</styleUrl><Point><coordinates>' + coordStr([x.a]) + '</coordinates></Point></Placemark>');
-    if (x.b) k.push('<Placemark><name>F' + xmlEsc(x.name) + '</name><styleUrl>#llegada</styleUrl><Point><coordinates>' + coordStr([x.b]) + '</coordinates></Point></Placemark>');
+    if (x.line.length < 2) return;
+    k.push('<Placemark><name>' + xmlEsc(x.name) + '</name><styleUrl>#tramo</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(x.line) + '</coordinates></LineString></Placemark>');
+    k.push('<Placemark><name>L' + xmlEsc(x.name) + '</name><styleUrl>#largada</styleUrl><Point><coordinates>' + coordStr([x.a]) + '</coordinates></Point></Placemark>');
+    k.push('<Placemark><name>F' + xmlEsc(x.name) + '</name><styleUrl>#llegada</styleUrl><Point><coordinates>' + coordStr([x.b]) + '</coordinates></Point></Placemark>');
   });
-  k.push('</Folder><Folder><name>Puntos de foto</name>');
-  R.tramos.forEach(function (x) {
-    x.pts.forEach(function (p) {
-      if (p.lat == null) return;
-      var ac = accessOf(p), d = [];
-      if (p.d != null) d.push(fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from));
-      if (p.toEnd != null && p === x.pts[x.pts.length - 1]) d.push(fmtD(p.toEnd) + ' a la llegada');
-      d.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ', ' + pl(p.audios.length, 'nota', 'notas') : ''));
-      if (p.signal) d.push('Señal ' + p.signal.toLowerCase());
-      if (ac) d.push('Acceso a pie: ' + fmtD(ac.len) + ' desde donde quedó el auto');
-      var sum = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' '); if (sum) d.push(sum);
-      k.push('<Placemark><name>' + xmlEsc(x.name + ' · P' + p.n) + '</name><description>' + xmlEsc(d.join(' · ')) + '</description><styleUrl>#foto</styleUrl><Point><coordinates>' + coordStr([p]) + '</coordinates></Point></Placemark>');
-      if (ac) {
-        k.push('<Placemark><name>' + xmlEsc('Acceso a pie a P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#pie</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(simplify(ac.path, 2)) + '</coordinates></LineString></Placemark>');
-        k.push('<Placemark><name>' + xmlEsc('Auto para P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#auto</styleUrl><Point><coordinates>' + coordStr([ac.park]) + '</coordinates></Point></Placemark>');
-      }
+  k.push('</Folder>');
+  var anyPts = R.photos.some(function (x) { return x.pts.length; });
+  if (anyPts) {
+    k.push('<Folder><name>Puntos de foto</name>');
+    R.photos.forEach(function (x) {
+      x.pts.forEach(function (p) {
+        if (p.lat == null) return;
+        var ac = accessOf(p), d = [];
+        if (p.d != null) d.push(fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from));
+        d.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ', ' + pl(p.audios.length, 'nota', 'notas') : ''));
+        if (p.signal) d.push('Señal ' + p.signal.toLowerCase());
+        if (ac) d.push('Acceso a pie: ' + fmtD(ac.len) + ' desde donde quedó el auto');
+        var sum = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' '); if (sum) d.push(sum);
+        k.push('<Placemark><name>' + xmlEsc(x.name + ' · P' + p.n) + '</name><description>' + xmlEsc(d.join(' · ')) + '</description><styleUrl>#foto</styleUrl><Point><coordinates>' + coordStr([p]) + '</coordinates></Point></Placemark>');
+        if (ac) {
+          k.push('<Placemark><name>' + xmlEsc('Acceso a pie a P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#pie</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(simplify(ac.path, 2)) + '</coordinates></LineString></Placemark>');
+          k.push('<Placemark><name>' + xmlEsc('Auto para P' + p.n + ' (' + x.name + ')') + '</name><styleUrl>#auto</styleUrl><Point><coordinates>' + coordStr([ac.park]) + '</coordinates></Point></Placemark>');
+        }
+      });
     });
-  });
-  k.push('</Folder><Folder><name>Enlaces</name>');
-  R.links.forEach(function (l, i) { k.push('<Placemark><name>Enlace ' + (i + 1) + '</name><styleUrl>#enlace</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(l) + '</coordinates></LineString></Placemark>'); });
-  k.push('</Folder></Document></kml>');
+    k.push('</Folder>');
+  }
+  var walks = [].concat.apply([], R.tramos.map(function (x) { return x.walks.map(function (w) { return { w: w, name: x.name }; }); }));
+  if (walks.length) {
+    k.push('<Folder><name>A pie</name>');
+    walks.forEach(function (o, i) { k.push('<Placemark><name>' + xmlEsc('A pie ' + (i + 1) + ' (' + o.name + ')') + '</name><styleUrl>#pie</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coordStr(simplify(o.w.pts, 2)) + '</coordinates></LineString></Placemark>'); });
+    k.push('</Folder>');
+  }
+  k.push('</Document></kml>');
   return k.join('\n');
 }
 function buildGPX() {
   var R = routeData(), g = ['<?xml version="1.0" encoding="UTF-8"?>', '<gpx version="1.1" creator="Ojos de Tapir" xmlns="http://www.topografix.com/GPX/1/1">'];
   function wpt(p, name, desc) { g.push('<wpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lng.toFixed(6) + '"><name>' + xmlEsc(name) + '</name>' + (desc ? '<desc>' + xmlEsc(desc) + '</desc>' : '') + '</wpt>'); }
-  R.tramos.forEach(function (x) {
-    if (x.a) wpt(x.a, 'L' + x.name); if (x.b) wpt(x.b, 'F' + x.name);
-    x.pts.forEach(function (p) { if (p.lat != null) wpt(p, x.name + ' · P' + p.n, p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : ''); });
-  });
+  R.tramos.forEach(function (x) { if (x.line.length > 1) { wpt(x.a, 'L' + x.name); wpt(x.b, 'F' + x.name); } });
+  R.photos.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) wpt(p, x.name + ' · P' + p.n, p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : ''); }); });
   function trk(name, pts) { g.push('<trk><name>' + xmlEsc(name) + '</name><trkseg>' + pts.map(function (p) { return '<trkpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lng.toFixed(6) + '">' + (p.t ? '<time>' + new Date(p.t).toISOString() + '</time>' : '') + '</trkpt>'; }).join('') + '</trkseg></trk>'); }
   R.tramos.forEach(function (x) { if (x.line.length > 1) trk(x.name, x.line); });
-  R.links.forEach(function (l, i) { trk('Enlace ' + (i + 1), l); });
   g.push('</gpx>');
   return g.join('\n');
 }
@@ -1665,9 +1697,10 @@ function shareOrDownload(file, msgEl) {
   var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
 }
 function routeName(ext) { return 'huella_' + (S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '').replace(/[^\w\-]+/g, '_') + '_' : '') + new Date().toISOString().slice(0, 10) + '.' + ext; }
-function routeSummary() { var R = routeData(), np = R.tramos.reduce(function (s, x) { return s + x.pts.length; }, 0), na = 0; R.tramos.forEach(function (x) { x.pts.forEach(function (p) { if (accessOf(p)) na++; }); }); return pl(R.tramos.length, 'tramo', 'tramos') + ', ' + pl(R.links.length, 'enlace', 'enlaces') + ', ' + pl(np, 'punto', 'puntos') + ' de foto, ' + pl(na, 'acceso', 'accesos') + ' a pie'; }
+function routeSummary() { var R = routeData(), nt = R.tramos.filter(function (x) { return x.line.length > 1; }).length, np = R.photos.reduce(function (s, x) { return s + x.pts.length; }, 0); return pl(nt, 'tramo grabado', 'tramos grabados') + (np ? ', ' + pl(np, 'punto', 'puntos') + ' de foto' : ''); }
 document.getElementById('kmzOut').onclick = function () {
   var msg = document.getElementById('routeMsg');
+  if (!S.recs.some(function (r) { return r.t1; })) { msg.textContent = 'Todavía no hay ningún tramo grabado (Iniciar → Stop).'; return; }
   try {
     var kml = buildKML(), zip = makeZip([{ name: 'doc.kml', data: new TextEncoder().encode(kml) }]);
     shareOrDownload(new File([zip], routeName('kmz'), { type: 'application/vnd.google-earth.kmz' }), msg);
@@ -1679,6 +1712,84 @@ document.getElementById('gpxOut').onclick = function () {
   try { shareOrDownload(new File([buildGPX()], routeName('gpx'), { type: 'application/gpx+xml' }), msg); msg.textContent = 'GPX con ' + routeSummary() + '.'; }
   catch (e) { msg.textContent = 'No se pudo armar el GPX.'; }
 };
+
+
+/* ---------- REC: grabación manual del recorrido ---------- */
+function recActive() { for (var i = 0; i < S.recs.length; i++) if (!S.recs[i].t1) return S.recs[i]; return null; }
+function recStart() {
+  var n = S.recs.length + 1, r = { id: uid(), name: 'PE ' + n, t0: Date.now(), t1: null };
+  DB.put('recs', r).then(function () { S.recs.push(r); GPS.last = null; startGPS(); wake(); vib(40); renderRec(); toast('Grabando ' + r.name); }).catch(function () { toast('No se pudo empezar a grabar', 4000); });
+}
+function recStop() {
+  var r = recActive(); if (!r) return;
+  r.t1 = Date.now();
+  DB.put('recs', r).then(function () { SEG = null; cumCache = null; wake(); vib([40, 60, 40]); renderRec(); toast(r.name + ' guardado'); }).catch(function () { toast('No se pudo guardar', 4000); });
+}
+function fmtDur(ms) { var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); }
+var recTimer = null;
+function renderRec() {
+  var r = recActive(), btn = document.getElementById('recBtn');
+  btn.classList.toggle('on', !!r);
+  document.getElementById('recState').innerHTML = r ? '<span class="blink" style="color:#FF453A">●</span> Grabando ' + esc(r.name) : 'Sin grabar';
+  document.getElementById('recHint').textContent = r ? 'Mantené apretado 3 segundos para terminar (Stop)' : 'Tocá para empezar a grabar en la largada';
+  var st = document.getElementById('recStats'), mp = document.getElementById('recMap');
+  if (r) {
+    var pts = trackSorted().filter(function (p) { return p.t >= r.t0; }), len = 0;
+    for (var i = 1; i < pts.length; i++) len += hav(pts[i - 1], pts[i]);
+    var f = GPS.fix, seg = segments(), w = seg.walks[seg.walks.length - 1], last = pts[pts.length - 1];
+    var mode = !last ? '—' : (w && w.t1 >= last.t - 5000 ? 'A pie' : 'En auto');
+    st.style.display = 'grid'; st.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+    st.innerHTML = [['Tiempo', fmtDur(Date.now() - r.t0)], ['Distancia', fmtD(len)], ['Modo', mode]].map(function (x) { return '<div class="stat" style="text-align:center"><b>' + x[1] + '</b>' + x[0] + '</div>'; }).join('') +
+      '<div class="small muted" style="grid-column:1/-1;text-align:center;margin-top:2px">' + (f ? 'GPS ±' + Math.round(f.acc) + ' m' : 'Esperando GPS…') + '</div>';
+    mp.style.display = 'block'; drawRecMap(mp, pts);
+    if (!recTimer) recTimer = setInterval(function () { if (cur === 'recorrido' && recActive()) renderRec(); else { clearInterval(recTimer); recTimer = null; } }, 1000);
+  } else { st.style.display = 'none'; mp.style.display = 'none'; }
+  // lista de grabaciones
+  var L = recLines().filter(function (x) { return x.r.t1; });
+  document.getElementById('recList').innerHTML = L.length ? L.map(function (x) {
+    return '<div class="row" style="gap:10px"><input value="' + esc(x.name) + '" data-ren="' + x.r.id + '" aria-label="Nombre del tramo" style="flex:1;min-width:0;background:rgba(255,255,255,.08);border:0;border-radius:10px;color:#fff;font:600 16px -apple-system;padding:8px 10px"><span class="small muted" style="white-space:nowrap">' + fmtD(x.len) + ' · ' + fmtDur(x.r.t1 - x.r.t0) + '</span><button class="btn2" data-del="' + x.r.id + '" style="width:auto;padding:0 12px;height:34px;font-size:13px;color:#FF6961">Borrar</button></div>';
+  }).join('') : '<div class="row muted small">Todavía no grabaste ningún tramo.</div>';
+}
+function drawRecMap(c, pts) {
+  var r = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight; if (!W) return;
+  c.width = W * r; c.height = H * r; var g = c.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  if (pts.length < 2) { g.fillStyle = '#8E8E93'; g.font = '13px -apple-system'; g.textAlign = 'center'; g.fillText('El recorrido aparece acá al moverte', W / 2, H / 2); return; }
+  var k = Math.cos(pts[0].lat * Math.PI / 180), xs = pts.map(function (p) { return p.lng * k; }), ys = pts.map(function (p) { return -p.lat; });
+  var mnx = Math.min.apply(0, xs), mxx = Math.max.apply(0, xs), mny = Math.min.apply(0, ys), mxy = Math.max.apply(0, ys), s = Math.min((W - 30) / Math.max(mxx - mnx, 1e-5), (H - 30) / Math.max(mxy - mny, 1e-5));
+  function X(p) { return { x: W / 2 + (p.lng * k - (mnx + mxx) / 2) * s, y: H / 2 + (-p.lat - (mny + mxy) / 2) * s }; }
+  g.strokeStyle = '#FFD200'; g.lineWidth = 3.5; g.lineJoin = g.lineCap = 'round'; g.beginPath(); pts.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke();
+  var a = X(pts[0]), b = X(pts[pts.length - 1]);
+  g.fillStyle = '#FFD200'; g.beginPath(); g.arc(a.x, a.y, 5, 0, 7); g.fill();
+  g.fillStyle = '#0A84FF'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(b.x, b.y, 6, 0, 7); g.fill(); g.stroke();
+}
+var recStoppedAt = 0;
+document.getElementById('recBtn').addEventListener('click', function () { if (Date.now() - recStoppedAt < 1500) return; if (!recActive()) recStart(); });
+(function () {
+  var b = document.getElementById('recBtn'), raf = null, t0 = 0, hint = document.getElementById('recHint');
+  function cancel() { cancelAnimationFrame(raf); raf = null; if (recActive()) hint.textContent = 'Mantené apretado 3 segundos para terminar (Stop)'; b.style.boxShadow = ''; }
+  function step() {
+    var k = Math.min(1, (performance.now() - t0) / 3000);
+    b.style.boxShadow = '0 0 0 ' + Math.round(k * 10) + 'px rgba(255,69,58,.45)';
+    hint.textContent = k < 1 ? 'Seguí apretando… ' + Math.ceil(3 - k * 3) : 'Guardando…';
+    if (k >= 1) { raf = null; b.style.boxShadow = ''; recStoppedAt = Date.now(); recStop(); return; }
+    raf = requestAnimationFrame(step);
+  }
+  b.addEventListener('pointerdown', function (e) { if (!recActive()) return; e.preventDefault(); t0 = performance.now(); raf = requestAnimationFrame(step); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { b.addEventListener(ev, function () { if (raf) cancel(); }); });
+  b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+document.getElementById('recList').addEventListener('change', function (e) {
+  var i = e.target.closest('[data-ren]'); if (!i) return;
+  var r = S.recs.filter(function (x) { return x.id === i.dataset.ren; })[0]; if (!r) return;
+  r.name = i.value.trim() || r.name; DB.put('recs', r).then(function () { toast('Nombre guardado'); });
+});
+document.getElementById('recList').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-del]'); if (!b) return;
+  if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = '¿Seguro?'; setTimeout(function () { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Borrar'; } }, 3000); return; }
+  var id = b.dataset.del, ids = S.track.filter(function (p) { return p.rec === id; }).map(function (p) { return p.id; });
+  var t = DB.tx(['recs', 'track']); t.objectStore('recs').delete(id); ids.forEach(function (k) { if (k != null) t.objectStore('track').delete(k); });
+  t.oncomplete = function () { S.recs = S.recs.filter(function (x) { return x.id !== id; }); S.track = S.track.filter(function (p) { return p.rec !== id; }); SEG = null; cumCache = null; renderRec(); toast('Tramo grabado borrado'); };
+});
 
 /* ---------- nueva carrera (reset) ---------- */
 document.getElementById('resetBtn').onclick = function () {
@@ -1702,13 +1813,13 @@ document.getElementById('resetZip').onclick = function () { document.getElementB
   b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 })();
 function resetAll() {
-  var stores = ['track', 'media', 'flags', 'kmz'];
+  var stores = ['track', 'media', 'flags', 'kmz', 'recs'];
   new Promise(function (res, rej) {
     var t = DB.tx(stores); stores.forEach(function (st) { t.objectStore(st).clear(); });
     t.oncomplete = res; t.onerror = function () { rej(t.error); };
   }).then(function () {
     Object.keys(URLS).forEach(function (k) { URL.revokeObjectURL(URLS[k]); delete URLS[k]; });
-    S.track = []; S.media = []; S.flags = []; S.kmz = null; GPS.last = null; cumCache = null; stCache = {}; tsCache = {}; GM.fitted = false; PT.sel = null;
+    S.track = []; S.media = []; S.flags = []; S.kmz = null; S.recs = []; SEG = null; GPS.last = null; cumCache = null; stCache = {}; tsCache = {}; GM.fitted = false; PT.sel = null;
     document.getElementById('resetDim').classList.remove('on');
     document.getElementById('resetFill').style.width = '0';
     toast('Listo: carrera nueva, todo en cero', 3000); cur = null; go('inicio');
@@ -1718,7 +1829,8 @@ function resetAll() {
 /* ---------- arranque ---------- */
 document.getElementById('ver').textContent = 'Ojos de Tapir v' + VERSION;
 document.getElementById('ver2').textContent = 'Ojos de Tapir v' + VERSION;
-DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'), DB.all('flags'), DB.all('kmz')]); }).then(function (r) {
+DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'), DB.all('flags'), DB.all('kmz'), DB.all('recs')]); }).then(function (r) {
+  S.recs = r[4] || [];
   S.track = r[0]; S.media = r[1]; S.flags = r[2]; S.kmz = (r[3] || []).filter(function (k) { return k.id === 'current'; })[0] || null;
   var tr = trackSorted(); GPS.last = tr[tr.length - 1] || null;
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
