@@ -291,7 +291,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.10.0';
+var VERSION = '1.10.1';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -886,6 +886,7 @@ function readKmzFile(file) {
 var START_RE = /^(L\s*(PE|PSE|PSSE|SSS|SS|SD|SH|TC|P\s*\d)|LARGADA|START|SALIDA)/i;
 var END_RE = /^(F\s*(PE|PSE|PSSE|SSS|SS|SD|SH|TC|P\s*\d)|LLEGADA|FIN\b|FINISH|STOP|META)/i;
 var STAGE_RE = /^(PE|PSE|PSSE|SSS|SS|SD|TC)\s*\d|^(PE|PSE|PSSE|SSS|SS)\b|^(TRAMO|PRUEBA|SHAKE\s*DOWN|SHAKEDOWN|SUPER\s*ESPECIAL|SUPER\s*SPECIAL)/i;
+var KMZ_PARSER = 2;
 var LINK_RE = /\b(enlace|link|traslado|liaison|asistencia|parque)\b|\s(a|al|hasta|>|-+>)\s*(CHA?|PC|TC|RG|PS|SA|PA)\b|^\s*(F|L)\s*(PE|PSE|PSSE|SSS|SS|SD)\b|^\s*(CHA?|TC|PC|RG)\s*\d/i;
 function numOf(n) { var m = String(n || '').match(/\d+\s*[A-Z]?(\s*\/\s*\d+\s*[A-Z]?)*/i); return m ? m[0].replace(/\s+/g, '').toUpperCase() : null; }
 function segDist(p, a, b) {
@@ -941,7 +942,7 @@ document.getElementById('kmzFile').addEventListener('change', function () {
   readKmzFile(f).then(function (txt) {
     var r = parseKml(txt);
     if (!r.stages.length) throw new Error('No encontré tramos (LPE/FPE, PE, PSE o SS) en este archivo');
-    var k = { id: 'current', file: f.name, loadedAt: Date.now(), stages: r.stages, discarded: r.discarded, original: f };
+    var k = { id: 'current', parser: KMZ_PARSER, file: f.name, loadedAt: Date.now(), stages: r.stages, discarded: r.discarded, original: f };
     return DB.put('kmz', k).then(function () { S.kmz = k; GM.fitted = false; renderTramos(); toast(r.stages.length + ' tramos detectados en el KMZ', 3500); });
   }).catch(function (e) { toast(e.message || 'No se pudo leer el archivo', 5000); });
 });
@@ -1350,6 +1351,7 @@ document.getElementById('exZip').onclick = function () {
 
 /* ---------- mapa en PDF ---------- */
 var PW = 794, PH = 1123, PK = 1.5625; // A4 en px de diseño; el canvas va a 1240x1754 (150 dpi)
+function fitTxt(g, t, maxW) { if (g.measureText(t).width <= maxW) return t; while (t.length > 1 && g.measureText(t + '…').width > maxW) t = t.slice(0, -1); return t + '…'; }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function newPage() {
   var c = document.createElement('canvas'); c.width = Math.round(PW * PK); c.height = Math.round(PH * PK);
@@ -1516,7 +1518,7 @@ function drawCard(g, p, x, y, w, h) {
     if (p.toEnd != null && p.last) meta.push(fmtD(p.toEnd) + ' a la llegada');
     meta.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ' · ' + pl(p.audios.length, 'nota', 'notas') : ''));
     font(g, '500', 11.5); g.fillStyle = '#D1D1D6'; g.fillText(meta.join(' · '), tx, y + 52);
-    g.fillStyle = sigc || '#636366'; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText(p.signal ? 'Señal de celular: ' + p.signal.toLowerCase() : 'Señal de celular: sin registro (foto importada)', tx + 13, y + 73);
+    g.fillStyle = sigc || '#636366'; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText(fitTxt(g, p.signal ? 'Señal de celular: ' + p.signal.toLowerCase() : 'Señal: sin registro (foto importada)', tw2 - 14), tx + 13, y + 73);
     var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
     var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
     var ics = iconsOf(p).map(function (k) { return ICONOS[k][0]; });
@@ -1947,6 +1949,15 @@ DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'
   S.recs = r[4] || [];
   S.track = r[0]; S.media = r[1]; S.flags = r[2]; S.kmz = (r[3] || []).filter(function (k) { return k.id === 'current'; })[0] || null;
   var tr = trackSorted(); GPS.last = tr[tr.length - 1] || null;
+  // si el KMZ se leyó con una versión vieja, se vuelve a leer para separar bien tramos y enlaces
+  if (S.kmz && S.kmz.original && S.kmz.parser !== KMZ_PARSER) {
+    readKmzFile(S.kmz.original).then(function (txt) {
+      var p = parseKml(txt); if (!p.stages.length) return;
+      S.kmz.stages = p.stages; S.kmz.discarded = p.discarded; S.kmz.parser = KMZ_PARSER;
+      stCache = {}; tsCache = {}; GM.fitted = false;
+      return DB.put('kmz', S.kmz).then(function () { var c = cur; if (c && c !== 'camara') { cur = null; go(c); } });
+    }).catch(function () {});
+  }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   startGPS(); measureSignal(); setInterval(function () { measureSignal().then(function () { if (cur === 'camara') renderCam(); }); }, 20000);
   go(openTramo() ? 'camara' : 'inicio');
