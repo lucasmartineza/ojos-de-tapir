@@ -1,5 +1,5 @@
 // Ojos de Tapir — service worker. Subir VERSION en cada publicación.
-var VERSION = '1.0.0';
+var VERSION = '1.1.1';
 var CACHE = 'ojos-de-tapir-' + VERSION;
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'tpr.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', function (e) {

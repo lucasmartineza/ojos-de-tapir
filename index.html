@@ -122,7 +122,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
     <button class="btn tint" data-go="camara"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Start</button>
   </div>
   <div class="grid4">
-    <button class="tile g" data-go="tramos" data-kmz="1"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><div><b>KMZ</b><br><span>Sin cargar</span></div></button>
+    <button class="tile g" data-go="tramos" data-kmz="1"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><div><b>KMZ</b><br><span id="tileKmz">Sin cargar</span></div></button>
     <button class="tile g" data-go="tramos"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg><div><b>Tramos</b><br><span id="tileTramos">0</span></div></button>
     <button class="tile g" data-go="puntos"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><div><b>Puntos</b><br><span id="tilePuntos">0</span></div></button>
     <button class="tile g" data-go="exportar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v6h14v-6"/></svg><div><b>Exportar</b><br><span>Respaldo</span></div></button>
@@ -169,11 +169,12 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <!-- TRAMOS -->
 <section class="view" id="v-tramos">
   <h1>Tramos</h1><p class="sub" id="trSub"></p>
+  <div class="card g" id="kmzCard"></div>
+  <input type="file" id="kmzFile" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml" style="display:none">
   <div class="list g" id="trList"></div>
   <div class="card g small" style="display:flex;flex-direction:column;gap:10px;font-size:14px" id="trInfo"></div>
   <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
     <button class="btn tint" disabled>Crear mapa · próxima etapa</button>
-    <button class="btn2" disabled>Cargar KMZ · próxima etapa</button>
   </div>
 </section>
 
@@ -227,7 +228,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 
 <script>
 'use strict';
-var VERSION = '1.0.0';
+var VERSION = '1.1.1';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -267,12 +268,15 @@ var DB = {
   db: null,
   open: function () {
     return new Promise(function (res, rej) {
-      var r = indexedDB.open('ojos-de-tapir', 1);
-      r.onupgradeneeded = function () {
+      var r = indexedDB.open('ojos-de-tapir', 2);
+      r.onupgradeneeded = function (e) {
         var d = r.result;
-        d.createObjectStore('track', { keyPath: 'id', autoIncrement: true });
-        d.createObjectStore('media', { keyPath: 'id' });
-        d.createObjectStore('flags', { keyPath: 'id' });
+        if (e.oldVersion < 1) {
+          d.createObjectStore('track', { keyPath: 'id', autoIncrement: true });
+          d.createObjectStore('media', { keyPath: 'id' });
+          d.createObjectStore('flags', { keyPath: 'id' });
+        }
+        if (e.oldVersion < 2) d.createObjectStore('kmz', { keyPath: 'id' });
       };
       r.onsuccess = function () { DB.db = r.result; res(); };
       r.onerror = function () { rej(r.error); };
@@ -291,7 +295,7 @@ var DB = {
     return new Promise(function (res, rej) { var r = DB.db.transaction(store, 'readonly').objectStore(store).getAll(); r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; });
   }
 };
-var S = { track: [], media: [], flags: [] };
+var S = { track: [], media: [], flags: [], kmz: null };
 
 /* ---------- GPS y recorrido ---------- */
 var GPS = { fix: null, watch: null, last: null };
@@ -458,6 +462,7 @@ function renderHome() {
   document.getElementById('homeSum').textContent = T.length + (T.length === 1 ? ' tramo' : ' tramos') + ' · ' + npts + ' puntos · ' + photos + ' fotos';
   document.getElementById('tileTramos').textContent = T.length;
   document.getElementById('tilePuntos').textContent = npts;
+  document.getElementById('tileKmz').textContent = S.kmz ? S.kmz.stages.length + ' tramos' : 'Sin cargar';
   var standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
   document.getElementById('installCard').style.display = standalone ? 'none' : 'block';
   showFact();
@@ -635,6 +640,11 @@ function openPicker(kind, replaceId, centerAt) {
 function sizePicker() { var r = window.devicePixelRatio || 1; pcv.width = innerWidth * r; pcv.height = innerHeight * r; P.ctx = pcv.getContext('2d'); P.ctx.setTransform(r, 0, 0, r, 0, 0); }
 function centerTarget() {
   var c = xy2m(P.cx, P.cy), n = P.snap ? nearestTrack(c.lat, c.lng) : null;
+  if (P.snap && S.kmz) {
+    var best = null, bd = 50 / P.sc; // 50 px en pantalla
+    S.kmz.stages.forEach(function (st) { var m = FM.kind === 'start' ? st.start : st.end, d = hav(c, m); if (d < bd) { bd = d; best = m; } });
+    if (best) { var nt = nearestTrack(best.lat, best.lng); return { raw: c, snap: nt, official: best, pos: { lat: best.lat, lng: best.lng } }; }
+  }
   return { raw: c, snap: n, pos: n ? { lat: n.p.lat, lng: n.p.lng } : c };
 }
 function drawPicker() {
@@ -647,6 +657,12 @@ function drawPicker() {
   var x0 = P.cx - ox / P.sc, x1 = P.cx + ox / P.sc, y0 = P.cy - oy / P.sc, y1 = P.cy + oy / P.sc;
   for (var gx = Math.floor(x0 / step) * step; gx < x1; gx += step) { var sx = ox + (gx - P.cx) * P.sc; g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx, H); g.stroke(); }
   for (var gy = Math.floor(y0 / step) * step; gy < y1; gy += step) { var sy = oy + (gy - P.cy) * P.sc; g.beginPath(); g.moveTo(0, sy); g.lineTo(W, sy); g.stroke(); }
+  // tramos del KMZ
+  if (S.kmz) S.kmz.stages.forEach(function (st) {
+    g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 3; g.setLineDash([]); g.beginPath();
+    st.coords.forEach(function (p, i) { var s = X(p); if (i) g.lineTo(s.x, s.y); else g.moveTo(s.x, s.y); }); g.stroke();
+    [[st.start, '#fff'], [st.end, '#000']].forEach(function (m) { var s = X(m[0]); g.fillStyle = m[1]; g.strokeStyle = '#fff'; g.lineWidth = 2; g.fillRect(s.x - 6, s.y - 6, 12, 12); g.strokeRect(s.x - 6, s.y - 6, 12, 12); g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '600 12px -apple-system'; g.textAlign = 'left'; g.fillText(m[0].name, s.x + 10, s.y + 4); });
+  });
   // recorrido
   var tr = trackSorted();
   if (tr.length > 1) { g.strokeStyle = '#FFD200'; g.lineWidth = 5; g.lineJoin = g.lineCap = 'round'; g.beginPath(); tr.forEach(function (p, i) { var s = X(p); if (i) g.lineTo(s.x, s.y); else g.moveTo(s.x, s.y); }); g.stroke(); }
@@ -664,7 +680,7 @@ function drawPicker() {
   // datos
   var at = ct.snap ? alongAt(ct.snap.p.t) : null, C = cum();
   document.getElementById('pA').textContent = at != null ? fmtKm(at) : (tr.length ? 'Fuera' : '—');
-  document.getElementById('pAs').textContent = at != null ? 'del recorrido grabado' : 'sin recorrido cerca';
+  document.getElementById('pAs').textContent = ct.official ? 'enganchada a ' + ct.official.name + ' (KMZ)' : (at != null ? 'del recorrido grabado' : 'sin recorrido cerca');
   document.getElementById('pB').textContent = f ? fmtD(hav(f, ct.pos)) : '—';
 }
 (function () {
@@ -705,6 +721,112 @@ document.getElementById('pOk').onclick = function () {
   }).catch(function () { toast('No se pudo guardar la marca', 4000); });
 };
 
+/* ---------- KMZ de la organización ---------- */
+function unzipFirstKml(buf) {
+  var dv = new DataView(buf), u8 = new Uint8Array(buf), i = u8.length - 22;
+  while (i >= 0 && dv.getUint32(i, true) !== 0x06054b50) i--;
+  if (i < 0) return Promise.reject(new Error('El archivo no es un KMZ válido'));
+  var n = dv.getUint16(i + 10, true), p = dv.getUint32(i + 16, true), dec = new TextDecoder(), best = null;
+  for (var k = 0; k < n; k++) {
+    var method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    if (/\.kml$/i.test(name) && (!best || /^doc\.kml$/i.test(name))) best = { method: method, csize: csize, off: off };
+    p += 46 + nlen + xlen + clen;
+  }
+  if (!best) return Promise.reject(new Error('El KMZ no tiene ningún KML adentro'));
+  var lnl = dv.getUint16(best.off + 26, true), lxl = dv.getUint16(best.off + 28, true);
+  var data = u8.subarray(best.off + 30 + lnl + lxl, best.off + 30 + lnl + lxl + best.csize);
+  if (best.method === 0) return Promise.resolve(dec.decode(data));
+  if (best.method !== 8 || !window.DecompressionStream) return Promise.reject(new Error('Este iPhone no puede descomprimir el KMZ (actualizá iOS)'));
+  var ds = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(ds).text();
+}
+function readKmzFile(file) {
+  return file.arrayBuffer().then(function (buf) {
+    var head = new Uint8Array(buf, 0, 2);
+    if (head[0] === 0x50 && head[1] === 0x4b) return unzipFirstKml(buf);
+    return new TextDecoder().decode(buf);
+  });
+}
+var START_RE = /^(L\s*(PE|PSE|SSS|SS|SH|TC|P\s*\d)|LARGADA|START)/i;
+var END_RE = /^(F\s*(PE|PSE|SSS|SS|SH|TC|P\s*\d)|LLEGADA|FIN\b|FINISH|STOP)/i;
+var STAGE_RE = /^(PE|PSE|SSS|SS|TC|TRAMO|PRUEBA|SHAKE\s*DOWN|SHAKEDOWN)\b|^(PE|PSE|SS)\s*\d/i;
+function segDist(p, a, b) {
+  var k = Math.cos(p.lat * Math.PI / 180) * 111320, kl = 110540;
+  var ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * kl, bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * kl;
+  var dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+function lineDist(p, co) { var m = Infinity; for (var i = 1; i < co.length; i++) m = Math.min(m, segDist(p, co[i - 1], co[i])); return co.length === 1 ? hav(p, co[0]) : m; }
+function parseKml(text) {
+  var doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('El KML tiene errores y no se puede leer');
+  function kid(el, tag) { for (var c = el.firstElementChild; c; c = c.nextElementSibling) if (c.localName === tag) return c; return null; }
+  function coordsOf(el) { return (el.textContent || '').trim().split(/\s+/).map(function (c) { var a = c.split(','); return { lng: +a[0], lat: +a[1] }; }).filter(function (q) { return isFinite(q.lat) && isFinite(q.lng); }); }
+  var pts = [], lines = [];
+  Array.prototype.forEach.call(doc.getElementsByTagNameNS('*', 'Placemark'), function (pm) {
+    var nm = kid(pm, 'name'), name = nm ? nm.textContent.trim() : '(sin nombre)';
+    var ls = pm.getElementsByTagNameNS('*', 'LineString'), pt = pm.getElementsByTagNameNS('*', 'Point');
+    if (ls.length) {
+      var co = []; Array.prototype.forEach.call(ls, function (l) { var c = l.getElementsByTagNameNS('*', 'coordinates')[0]; if (c) co = co.concat(coordsOf(c)); });
+      if (co.length > 1) lines.push({ name: name, coords: co });
+    } else if (pt.length) {
+      var c = pt[0].getElementsByTagNameNS('*', 'coordinates')[0], q = c ? coordsOf(c)[0] : null;
+      if (q) pts.push({ name: name, lat: q.lat, lng: q.lng });
+    } else pts.push({ name: name, lat: null, lng: null });
+  });
+  var used = {}, stages = [];
+  lines.forEach(function (l) {
+    var a = l.coords[0], b = l.coords[l.coords.length - 1];
+    function near(re, q) { var best = null, bd = 400; pts.forEach(function (p, i) { if (p.lat == null || !re.test(p.name)) return; var d = hav(p, q); if (d < bd) { bd = d; best = i; } }); return best; }
+    var sA = near(START_RE, a), sB = near(START_RE, b), fA = near(END_RE, a), fB = near(END_RE, b);
+    var rev = (sA == null && sB != null) || (fA != null && fB == null && sA == null);
+    var co = rev ? l.coords.slice().reverse() : l.coords, si = rev ? sB : sA, fi2 = rev ? fA : fB;
+    if (!STAGE_RE.test(l.name) && !(si != null && fi2 != null)) return;
+    var st = { name: l.name, coords: co, start: si != null ? pts[si] : { name: 'Largada', lat: co[0].lat, lng: co[0].lng }, end: fi2 != null ? pts[fi2] : { name: 'Llegada', lat: co[co.length - 1].lat, lng: co[co.length - 1].lng } };
+    if (si != null) used[si] = 1; if (fi2 != null) used[fi2] = 1;
+    var len = 0; for (var i = 1; i < co.length; i++) len += hav(co[i - 1], co[i]); st.len = len;
+    st.shake = /shake/i.test(l.name);
+    stages.push(st); l.stage = true;
+  });
+  // solo se guarda trazado, largada y llegada: todo lo demás se descarta
+  var discarded = pts.filter(function (p, i) { return !used[i]; }).map(function (p) { return p.name; }).concat(lines.filter(function (l) { return !l.stage; }).map(function (l) { return l.name; }));
+  return { stages: stages, discarded: discarded };
+}
+document.getElementById('kmzFile').addEventListener('change', function () {
+  var f = this.files[0]; this.value = ''; if (!f) return;
+  toast('Leyendo ' + f.name + '…');
+  readKmzFile(f).then(function (txt) {
+    var r = parseKml(txt);
+    if (!r.stages.length) throw new Error('No encontré tramos (LPE/FPE, PE, PSE o SS) en este archivo');
+    var k = { id: 'current', file: f.name, loadedAt: Date.now(), stages: r.stages, discarded: r.discarded, original: f };
+    return DB.put('kmz', k).then(function () { S.kmz = k; renderTramos(); toast(r.stages.length + ' tramos detectados en el KMZ', 3500); });
+  }).catch(function (e) { toast(e.message || 'No se pudo leer el archivo', 5000); });
+});
+function stageFor(tr) {
+  if (!S.kmz || !tr) return null;
+  var seg = trackSorted().filter(function (p) { return p.t >= tr.t0 && p.t <= (tr.t1 === Infinity ? Date.now() : tr.t1); });
+  if (!seg.length) seg = [tr.start, tr.end].filter(function (f) { return f && f.lat != null; });
+  if (!seg.length) return null;
+  var step = Math.max(1, Math.floor(seg.length / 40)), best = null, bd = 250;
+  S.kmz.stages.forEach(function (st) {
+    var sum = 0, n = 0; for (var i = 0; i < seg.length; i += step) { sum += lineDist(seg[i], st.coords); n++; }
+    var m = sum / n; if (m < bd) { bd = m; best = st; }
+  });
+  return best;
+}
+function renderKmzCard() {
+  var c = document.getElementById('kmzCard'), k = S.kmz;
+  if (!k) {
+    c.innerHTML = '<b style="font-size:17px">KMZ de la carrera</b><div class="small muted" style="margin:4px 0 12px;line-height:1.4">Opcional. La app busca sola los tramos entre largada y llegada (LPE/FPE, PE, PSE, SS) y descarta enlaces, asistencia y demás. Podés cargarlo antes o después del reconocimiento.</div><button class="btn tint" id="kmzPick">Elegir archivo KMZ</button>';
+  } else {
+    c.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="min-width:0"><b style="font-size:17px;display:flex;align-items:center;gap:8px"><span style="color:#34C759">' + svgI('<path d="m5 12 5 5 9-10"/>', 20, 2.4) + '</span>' + k.stages.length + ' tramos en el KMZ</b><div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(k.file) + '</div></div><button class="btn2" id="kmzPick" style="width:auto;padding:0 14px;height:34px;font-size:13px;flex:none">Cambiar</button></div>' +
+      '<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">' + k.stages.map(function (st) { return '<div style="display:flex;justify-content:space-between;font-size:14px"><span><b>' + esc(st.name) + '</b> <span class="muted small">· ' + esc(st.start.name) + ' → ' + esc(st.end.name) + '</span></span><span class="muted">' + fmtD(st.len) + '</span></div>'; }).join('') + '</div>' +
+      '<details style="margin-top:10px"><summary class="small" style="color:var(--accent-soft)">Descartados (' + k.discarded.length + ')</summary><div class="small muted" style="margin-top:6px;line-height:1.5">' + k.discarded.map(esc).join(' · ') + '</div></details>';
+  }
+  document.getElementById('kmzPick').onclick = function () { document.getElementById('kmzFile').click(); };
+}
+
 function checkFlagTime(kind, n, t) {
   var T = tramos(), tr = n ? T[n - 1] : null, prev = n ? T[n - 2] : T[T.length - 1], next = n ? T[n] : null;
   if (kind === 'end') {
@@ -719,12 +841,14 @@ function checkFlagTime(kind, n, t) {
 
 /* ---------- TRAMOS ---------- */
 function renderTramos() {
+  renderKmzCard();
   var T = tramos();
   document.getElementById('trSub').textContent = T.length ? 'Tocá un tramo para ajustar su largada o llegada.' : 'Todavía no marcaste ningún tramo. Usá la bandera en la cámara.';
   var html = T.map(function (t) {
     var pts = pointsOf(mediaOf(t)), ph = pts.reduce(function (s, p) { return s + p.photos.length; }, 0), L = tramoLen(t);
     var st = !t.start ? '<span style="color:#FF9F0A">Sin largada</span>' : !t.end ? '<span style="color:var(--accent)">En curso</span>' : '<span style="color:#34C759">Completo</span>';
-    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:600">Tramo ' + t.n + '</div><div class="small muted">' + fmtD(L) + ' · ' + pts.length + ' puntos · ' + ph + ' fotos</div></div><div class="small" style="font-weight:600">' + st + '</div></div>' +
+    var sg = stageFor(t);
+    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:600">Tramo ' + t.n + (sg ? ' <span style="color:var(--accent-soft);font-weight:600">· ' + esc(sg.name) + '</span>' : '') + '</div><div class="small muted">' + fmtD(L) + ' · ' + pts.length + ' puntos · ' + ph + ' fotos</div></div><div class="small" style="font-weight:600">' + st + '</div></div>' +
       '<div style="display:flex;gap:8px"><button class="btn2" style="height:36px;font-size:13px" data-adj="start" data-n="' + t.n + '">' + whiteFlag(16) + 'Largada</button><button class="btn2" style="height:36px;font-size:13px" data-adj="end" data-n="' + t.n + '">' + checkerFlag(16) + 'Llegada</button><button class="btn2" style="height:36px;font-size:13px" data-see="' + t.n + '">Puntos</button></div></div>';
   }).join('');
   var out = mediaOf(null);
@@ -755,7 +879,8 @@ function renderPuntos() {
   document.getElementById('ptChips').innerHTML = chips;
   var tr = PT.sel ? T[PT.sel - 1] : null, pts = pointsOf(mediaOf(tr));
   if (tr) pointDistances(tr, pts);
-  document.getElementById('ptSub').textContent = (tr ? 'Tramo ' + tr.n + ' · ' + fmtD(tramoLen(tr)) + ' · ' : '') + pts.length + ' puntos';
+  var sgn = stageFor(tr);
+  document.getElementById('ptSub').textContent = (tr ? 'Tramo ' + tr.n + (sgn ? ' (' + sgn.name + ')' : '') + ' · ' + fmtD(tramoLen(tr)) + ' · ' : '') + pts.length + ' puntos';
   document.getElementById('ptList').innerHTML = pts.length ? pts.map(function (p, i) {
     var th = p.photos[0] ? '<img src="' + urlOf(p.photos[0]) + '" alt="" style="width:60px;height:45px;border-radius:8px;object-fit:cover;display:block">' : '<span style="width:60px;height:45px;border-radius:8px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 18, 2) + '</span>';
     var fin = (i === pts.length - 1 && p.toEnd != null) ? ' · ' + fmtD(p.toEnd) + ' a la llegada' : '';
@@ -772,12 +897,13 @@ function drawMini(tr, pts) {
   c.width = W * r; c.height = H * r; var g = c.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0);
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   var seg = trackSorted().filter(function (p) { return !tr || (p.t >= tr.t0 && p.t <= (tr.t1 === Infinity ? Date.now() : tr.t1)); });
-  var all = seg.concat(pts.filter(function (p) { return p.lat != null; }));
+  var sg = stageFor(tr), all = seg.concat(pts.filter(function (p) { return p.lat != null; })).concat(sg ? sg.coords : []);
   if (!all.length) { g.fillStyle = '#8E8E93'; g.font = '14px -apple-system'; g.textAlign = 'center'; g.fillText('Sin recorrido grabado', W / 2, H / 2); return; }
   var la = all.map(function (p) { return p.lat; }), lo = all.map(function (p) { return p.lng; });
   var mla = Math.min.apply(0, la), Mla = Math.max.apply(0, la), mlo = Math.min.apply(0, lo), Mlo = Math.max.apply(0, lo);
   var k = Math.cos((mla + Mla) / 2 * Math.PI / 180), w = Math.max((Mlo - mlo) * k, 1e-5), h = Math.max(Mla - mla, 1e-5), s = Math.min((W - 40) / w, (H - 40) / h);
   function X(p) { return { x: W / 2 + ((p.lng - (mlo + Mlo) / 2) * k) * s, y: H / 2 - (p.lat - (mla + Mla) / 2) * s }; }
+  if (sg) { g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 6; g.lineJoin = g.lineCap = 'round'; g.beginPath(); sg.coords.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); }
   if (seg.length > 1) { g.strokeStyle = '#FFD200'; g.lineWidth = 4; g.lineJoin = g.lineCap = 'round'; g.beginPath(); seg.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); }
   pts.forEach(function (p) { if (p.lat == null) return; var q = X(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(q.x, q.y, 10, 0, 7); g.fill(); g.fillStyle = '#000'; g.font = 'bold 11px -apple-system'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, q.x, q.y + 1); });
 }
@@ -828,7 +954,7 @@ function renderExport() {
 }
 document.getElementById('exZip').onclick = function () {
   var btn = this; btn.disabled = true; btn.textContent = 'Armando respaldo…';
-  var files = [], meta = { app: 'Ojos de Tapir', version: VERSION, creado: new Date().toISOString(), radioPuntos: RADIUS, recorrido: trackSorted(), banderas: S.flags, archivos: [] };
+  var files = [], meta = { app: 'Ojos de Tapir', version: VERSION, creado: new Date().toISOString(), radioPuntos: RADIUS, recorrido: trackSorted(), banderas: S.flags, kmz: S.kmz ? { archivo: S.kmz.file, tramos: S.kmz.stages, descartados: S.kmz.discarded } : null, archivos: [] };
   var jobs = S.media.slice().sort(function (a, b) { return a.t - b.t; }).map(function (m, i) {
     var ext = m.type === 'photo' ? 'jpg' : (/webm/.test(m.mime) ? 'webm' : 'm4a');
     var name = (m.type === 'photo' ? 'fotos/' : 'notas/') + new Date(m.t).toISOString().replace(/[:.]/g, '-') + '_' + m.id + '.' + ext;
@@ -836,19 +962,22 @@ document.getElementById('exZip').onclick = function () {
     return m.blob.arrayBuffer().then(function (ab) { files.push({ name: name, data: new Uint8Array(ab) }); });
   });
   Promise.all(jobs).then(function () {
+    var kmzJob = S.kmz && S.kmz.original ? S.kmz.original.arrayBuffer().then(function (ab) { files.push({ name: 'kmz/' + S.kmz.file, data: new Uint8Array(ab) }); }) : Promise.resolve();
+    return kmzJob.then(function () {
     files.unshift({ name: 'relevamiento.json', data: new TextEncoder().encode(JSON.stringify(meta, null, 1)) });
     var zip = makeZip(files), fname = 'ojos-de-tapir_' + new Date().toISOString().slice(0, 10) + '.zip';
     var file = new File([zip], fname, { type: 'application/zip' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: fname }).catch(function () {});
     var a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+    });
   }).catch(function () { toast('No se pudo armar el respaldo', 4000); }).then(function () { btn.disabled = false; btn.textContent = 'Guardar respaldo (.zip)'; });
 };
 
 /* ---------- arranque ---------- */
 document.getElementById('ver').textContent = 'Ojos de Tapir v' + VERSION;
 document.getElementById('ver2').textContent = 'Ojos de Tapir v' + VERSION;
-DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'), DB.all('flags')]); }).then(function (r) {
-  S.track = r[0]; S.media = r[1]; S.flags = r[2];
+DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'), DB.all('flags'), DB.all('kmz')]); }).then(function (r) {
+  S.track = r[0]; S.media = r[1]; S.flags = r[2]; S.kmz = (r[3] || []).filter(function (k) { return k.id === 'current'; })[0] || null;
   var tr = trackSorted(); GPS.last = tr[tr.length - 1] || null;
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   startGPS(); measureSignal(); setInterval(function () { measureSignal().then(function () { if (cur === 'camara') renderCam(); }); }, 20000);
