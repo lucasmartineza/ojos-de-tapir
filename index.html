@@ -291,7 +291,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.10.2';
+var VERSION = '1.10.3';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1512,7 +1512,7 @@ function drawCard(g, p, x, y, w, h) {
     g.fillStyle = '#fff'; g.beginPath(); g.arc(tx + 12, y + 22, 12, 0, 7); g.fill();
     font(g, '800', 13); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, tx + 12, y + 23); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     font(g, '700', 13); g.fillStyle = '#fff';
-    var dtxt = p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : 'Punto ' + p.n;
+    var dtxt = p.offTxt ? p.offTxt : p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : 'Punto ' + p.n;
     g.fillText(dtxt, tx + 30, y + 27);
     var meta = [], sigc = p.signal ? SIGC[p.signal] : null;
     if (p.toEnd != null && p.last) meta.push(fmtD(p.toEnd) + ' a la llegada');
@@ -1536,7 +1536,14 @@ function pdfStageOf(t) { var st = tramoStage(t); return st; }
 function buildPDF(onStep) {
   if (!window.jspdf) return Promise.reject(new Error('Falta la librería de PDF. Recargá la app con señal.'));
   var T = allTramos().map(function (t) { var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st); if (pts.length) pts[pts.length - 1].last = true; return { t: t, st: st, pts: pts }; }).filter(function (x) { return x.pts.length; });
-  if (!T.length) return Promise.reject(new Error('Todavía no hay puntos para armar el mapa.'));
+  // puntos fuera de tramo: van al final, con su distancia al tramo más cercano
+  var OFF = pointsOf(mediaOf(null));
+  OFF.forEach(function (p) {
+    if (p.lat == null) { p.offTxt = 'Sin ubicación GPS'; return; }
+    var best = null, bd = Infinity; (S.kmz ? S.kmz.stages : []).forEach(function (st) { var d = lineDist(p, st.coords); if (d < bd) { bd = d; best = st; } });
+    p.offTxt = best ? 'A ' + fmtD(bd) + ' de ' + best.name : 'Fuera de tramo';
+  });
+  if (!T.length && !OFF.length) return Promise.reject(new Error('Todavía no hay puntos para armar el mapa.'));
   var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true }), first = true, today = new Date().toLocaleDateString('es-AR');
   var previews = [];
   function add(P) { if (!first) doc.addPage(); first = false; var u = P.c.toDataURL('image/jpeg', 0.86); previews.push(u); doc.addImage(u, 'JPEG', 0, 0, 595.28, 841.89); }
@@ -1547,6 +1554,8 @@ function buildPDF(onStep) {
   header(P, S.kmz ? 'Mapa general' : 'Relevamiento', (S.kmz ? stages.length + ' tramos en el KMZ · ' : '') + pl(T.length, 'tramo relevado', 'tramos relevados') + ' · ' + today, S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') : '', '');
   var fit = [].concat.apply([], stages.map(function (st) { return st.coords; })).concat(trackSorted());
   T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) fit.push(p); }); });
+  OFF.forEach(function (p) { if (p.lat != null) fit.push(p); });
+  if (!fit.length) fit = [{ lat: -31.4, lng: -64.2 }];
   var SGp = segments(), dimL = SGp.drives.map(function (d) { return { coords: d, color: 'rgba(150,150,160,.5)', width: 1.6 }; });
   var layers = dimL.concat(stages.map(function (st) { return { coords: st.coords, color: '#FFD200', width: 3.8, label: st.name }; }));
   var allPts = []; T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) allPts.push({ lat: p.lat, lng: p.lng, n: '' }); }); });
@@ -1563,6 +1572,7 @@ function buildPDF(onStep) {
       font(g, '500', 12); g.fillStyle = '#D1D1D6'; g.fillText(fmtD(len) + ' · ' + pl(x.pts.length, 'punto', 'puntos') + ' · ' + pl(x.pts.reduce(function (s, p) { return s + p.photos.length; }, 0), 'foto', 'fotos'), 200, y + 12);
       y += 20;
     });
+    if (OFF.length && y <= PH - 50) { font(g, '600', 12); g.fillStyle = '#F2F2F7'; g.fillText('Fuera de tramo', 40, y + 12); font(g, '500', 12); g.fillStyle = '#D1D1D6'; g.fillText(pl(OFF.length, 'punto', 'puntos') + ' · ' + pl(OFF.reduce(function (s, p) { return s + p.photos.length; }, 0), 'foto', 'fotos') + ' · al final', 200, y + 12); }
     add(P);
     // una hoja (o más) por tramo
     return T.reduce(function (pr, x, ti) {
@@ -1599,7 +1609,35 @@ function buildPDF(onStep) {
           }, Promise.resolve());
         });
       });
-    }, Promise.resolve());
+    }, Promise.resolve()).then(function () {
+      if (!OFF.length) return;
+      // hoja(s) final(es): puntos fuera de tramo
+      onStep('Puntos fuera de tramo…');
+      var geo = OFF.filter(function (p) { return p.lat != null; }), fitO = geo.slice();
+      if (geo.length) { // al menos ~2 km de ancho para ver el contexto
+        var la = geo.map(function (p) { return p.lat; }), ln = geo.map(function (p) { return p.lng; }), cla = (Math.min.apply(0, la) + Math.max.apply(0, la)) / 2, cln = (Math.min.apply(0, ln) + Math.max.apply(0, ln)) / 2;
+        fitO.push({ lat: cla - 0.009, lng: cln - 0.011 }, { lat: cla + 0.009, lng: cln + 0.011 });
+      }
+      var ctx = (S.kmz ? S.kmz.stages : []).map(function (st) { return { coords: st.coords, color: 'rgba(255,210,0,.35)', width: 2.5, label: st.name }; });
+      var go2 = function (dem) {
+        var per1 = geo.length ? 7 : 10, perN = 14, pages = [OFF.slice(0, per1)];
+        for (var i = per1; i < OFF.length; i += perN) pages.push(OFF.slice(i, i + perN));
+        return pages.reduce(function (pp, chunk, pi) {
+          return pp.then(function () {
+            var Q = newPage();
+            header(Q, 'Fuera de tramo' + (pi ? ' · continuación' : ''), pl(OFF.length, 'punto', 'puntos') + ' registrados fuera de los tramos · ' + today, 'Otros puntos', pages.length > 1 ? 'Hoja ' + (pi + 1) + ' de ' + pages.length : '');
+            var top = 116;
+            if (pi === 0 && geo.length) { mapPanel(Q.g, 40, 116, 714, 402, fitO, dimL.concat(ctx), [], OFF, dem); top = 532; }
+            var cw = 352, chh = 130, jobs = [];
+            chunk.forEach(function (p, k) { jobs.push(drawCard(Q.g, p, 40 + (k % 2) * (cw + 10), top + Math.floor(k / 2) * (chh + 10), cw, chh)); });
+            return Promise.all(jobs).then(function () { add(Q); });
+          });
+        }, Promise.resolve());
+      };
+      if (!geo.length) return go2(null);
+      var probe = newPage(), inf = mapPanel(probe.g, 40, 116, 714, 402, fitO, ctx, [], OFF, null);
+      return fetchDEM(inf.bounds, inf.mpp).then(go2);
+    });
   }).then(function () { return { blob: doc.output('blob'), previews: previews }; });
 }
 var PV = { file: null, url: null };
