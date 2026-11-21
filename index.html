@@ -290,7 +290,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.9.0';
+var VERSION = '1.9.1';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -1816,7 +1816,7 @@ document.getElementById('recList').addEventListener('click', function (e) {
 
 
 /* ---------- desgrabación de notas de voz (vía intermediario) ---------- */
-var TRANSCRIBE_URL = ''; // se completa con la dirección del Worker de Cloudflare
+var TRANSCRIBE_URL = 'https://ojos-de-tapir.laposta.workers.dev'; // se completa con la dirección del Worker de Cloudflare
 var ICONOS = {
   curva_izquierda: ['Curva izq.', '<path d="M17 20V12a5 5 0 0 0-5-5H6"/><path d="M9 4 6 7l3 3"/>'],
   curva_derecha: ['Curva der.', '<path d="M7 20V12a5 5 0 0 1 5-5h6"/><path d="m15 4 3 3-3 3"/>'],
