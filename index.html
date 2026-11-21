@@ -183,6 +183,11 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
   <h1>Puntos</h1><p class="sub" id="ptSub"></p>
   <div class="chips" id="ptChips"></div>
   <canvas class="mini g" id="miniMap"></canvas>
+  <div id="genWrap" style="display:none;position:relative;margin-top:14px">
+    <canvas class="g" id="genMap" style="width:100%;height:58vh;border-radius:22px;display:block;background:#05070a;touch-action:none"></canvas>
+    <button class="g" id="genFit" aria-label="Ver toda la carrera" style="position:absolute;right:10px;top:10px;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button class="g" id="genMe" aria-label="Centrar en mi ubicación" style="position:absolute;right:10px;top:58px;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg></button>
+  </div>
   <div class="list g" id="ptList"></div>
 </section>
 
@@ -228,7 +233,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 
 <script>
 'use strict';
-var VERSION = '1.1.1';
+var VERSION = '1.2.0';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -748,9 +753,9 @@ function readKmzFile(file) {
     return new TextDecoder().decode(buf);
   });
 }
-var START_RE = /^(L\s*(PE|PSE|SSS|SS|SH|TC|P\s*\d)|LARGADA|START)/i;
-var END_RE = /^(F\s*(PE|PSE|SSS|SS|SH|TC|P\s*\d)|LLEGADA|FIN\b|FINISH|STOP)/i;
-var STAGE_RE = /^(PE|PSE|SSS|SS|TC|TRAMO|PRUEBA|SHAKE\s*DOWN|SHAKEDOWN)\b|^(PE|PSE|SS)\s*\d/i;
+var START_RE = /^(L\s*(PE|PSE|PSSE|SSS|SS|SD|SH|TC|P\s*\d)|LARGADA|START|SALIDA)/i;
+var END_RE = /^(F\s*(PE|PSE|PSSE|SSS|SS|SD|SH|TC|P\s*\d)|LLEGADA|FIN\b|FINISH|STOP|META)/i;
+var STAGE_RE = /^(PE|PSE|PSSE|SSS|SS|SD|TC)\s*\d|^(PE|PSE|PSSE|SSS|SS)\b|^(TRAMO|PRUEBA|SHAKE\s*DOWN|SHAKEDOWN|SUPER\s*ESPECIAL|SUPER\s*SPECIAL)/i;
 function segDist(p, a, b) {
   var k = Math.cos(p.lat * Math.PI / 180) * 111320, kl = 110540;
   var ax = (a.lng - p.lng) * k, ay = (a.lat - p.lat) * kl, bx = (b.lng - p.lng) * k, by = (b.lat - p.lat) * kl;
@@ -800,7 +805,7 @@ document.getElementById('kmzFile').addEventListener('change', function () {
     var r = parseKml(txt);
     if (!r.stages.length) throw new Error('No encontré tramos (LPE/FPE, PE, PSE o SS) en este archivo');
     var k = { id: 'current', file: f.name, loadedAt: Date.now(), stages: r.stages, discarded: r.discarded, original: f };
-    return DB.put('kmz', k).then(function () { S.kmz = k; renderTramos(); toast(r.stages.length + ' tramos detectados en el KMZ', 3500); });
+    return DB.put('kmz', k).then(function () { S.kmz = k; GM.fitted = false; renderTramos(); toast(r.stages.length + ' tramos detectados en el KMZ', 3500); });
   }).catch(function (e) { toast(e.message || 'No se pudo leer el archivo', 5000); });
 });
 function stageFor(tr) {
@@ -873,10 +878,14 @@ document.getElementById('trList').addEventListener('click', function (e) {
 var PT = { sel: null };
 function renderPuntos() {
   var T = tramos(), out = mediaOf(null);
-  if (PT.sel == null || PT.sel > T.length) PT.sel = T.length ? (openTramo() || T[T.length - 1]).n : 0;
-  var chips = T.map(function (t) { return '<button class="chip' + (PT.sel === t.n ? ' on' : '') + '" data-sel="' + t.n + '">Tramo ' + t.n + '</button>'; }).join('');
+  if (PT.sel == null || PT.sel > T.length) PT.sel = T.length ? (openTramo() || T[T.length - 1]).n : (S.kmz ? -1 : 0);
+  var chips = '<button class="chip' + (PT.sel === -1 ? ' on' : '') + '" data-sel="-1">Mapa general</button>' + T.map(function (t) { return '<button class="chip' + (PT.sel === t.n ? ' on' : '') + '" data-sel="' + t.n + '">Tramo ' + t.n + '</button>'; }).join('');
   if (out.length || !T.length) chips += '<button class="chip' + (PT.sel === 0 ? ' on' : '') + '" data-sel="0">Fuera de tramo</button>';
   document.getElementById('ptChips').innerHTML = chips;
+  var gen = PT.sel === -1;
+  document.getElementById('genWrap').style.display = gen ? 'block' : 'none';
+  document.getElementById('miniMap').style.display = gen ? 'none' : 'block';
+  if (gen) { renderGeneral(T); return; }
   var tr = PT.sel ? T[PT.sel - 1] : null, pts = pointsOf(mediaOf(tr));
   if (tr) pointDistances(tr, pts);
   var sgn = stageFor(tr);
@@ -891,6 +900,90 @@ function renderPuntos() {
   PT.pts = pts; PT.tr = tr;
   drawMini(tr, pts);
 }
+/* mapa general de la carrera */
+var GM = { cx: 0, cy: 0, sc: 0.05, lat0: 0, lng0: 0, fitted: false, ptrs: {}, pinch: null };
+var gcv = document.getElementById('genMap');
+function gxy(p) { return { x: (p.lng - GM.lng0) * Math.cos(GM.lat0 * Math.PI / 180) * 111320, y: -(p.lat - GM.lat0) * 110540 }; }
+var STAGE_COLORS = ['#7FE3F0', '#FF9F0A', '#BF5AF2', '#30D158', '#FF375F', '#64D2FF', '#5E5CE6', '#AC8E68'];
+function genItems() {
+  var items = [];
+  if (S.kmz) S.kmz.stages.forEach(function (st) { items = items.concat(st.coords); });
+  S.track.forEach(function (p) { items.push(p); });
+  return items;
+}
+function genFit() {
+  var it = genItems(), f = GPS.fix;
+  if (!it.length && f) it = [f];
+  if (!it.length) return;
+  GM.lat0 = it[0].lat; GM.lng0 = it[0].lng;
+  var xs = it.map(gxy), mx = Math.min.apply(0, xs.map(function (q) { return q.x; })), Mx = Math.max.apply(0, xs.map(function (q) { return q.x; })), my = Math.min.apply(0, xs.map(function (q) { return q.y; })), My = Math.max.apply(0, xs.map(function (q) { return q.y; }));
+  GM.cx = (mx + Mx) / 2; GM.cy = (my + My) / 2;
+  var W = gcv.clientWidth, H = gcv.clientHeight;
+  GM.sc = Math.min((W - 110) / Math.max(Mx - mx, 50), (H - 80) / Math.max(My - my, 50));
+  GM.fitted = true;
+}
+function drawGeneral() {
+  var r = window.devicePixelRatio || 1, W = gcv.clientWidth, H = gcv.clientHeight;
+  if (gcv.width !== Math.round(W * r)) { gcv.width = W * r; gcv.height = H * r; }
+  var g = gcv.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0);
+  g.fillStyle = '#05070a'; g.fillRect(0, 0, W, H);
+  function X(p) { var q = gxy(p); return { x: W / 2 + (q.x - GM.cx) * GM.sc, y: H / 2 + (q.y - GM.cy) * GM.sc }; }
+  function line(co, col, w, dash) { if (co.length < 2) return; g.strokeStyle = col; g.lineWidth = w; g.lineJoin = g.lineCap = 'round'; g.setLineDash(dash || []); g.beginPath(); co.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); g.setLineDash([]); }
+  if (!S.kmz && !S.track.length) { g.fillStyle = '#8E8E93'; g.font = '15px -apple-system'; g.textAlign = 'center'; g.fillText('Cargá el KMZ en Tramos para ver la carrera', W / 2, H / 2); return; }
+  // recorrido grabado (fino, punteado)
+  line(trackSorted(), 'rgba(255,210,0,.55)', 2, [4, 5]);
+  // tramos oficiales
+  if (S.kmz) S.kmz.stages.forEach(function (st, i) {
+    var col = STAGE_COLORS[i % STAGE_COLORS.length];
+    line(st.coords, col, 4);
+    var a = X(st.start), b = X(st.end);
+    g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 2; g.fillRect(a.x - 5, a.y - 5, 10, 10); g.strokeRect(a.x - 5, a.y - 5, 10, 10);
+    g.fillStyle = '#000'; g.strokeStyle = '#fff'; g.fillRect(b.x - 5, b.y - 5, 10, 10); g.strokeRect(b.x - 5, b.y - 5, 10, 10);
+    var m = X(st.coords[Math.floor(st.coords.length / 2)]);
+    g.font = '700 12px -apple-system'; var tw = g.measureText(st.name).width;
+    g.fillStyle = 'rgba(0,0,0,.75)'; g.strokeStyle = col; g.lineWidth = 1.5;
+    g.beginPath(); if (g.roundRect) g.roundRect(m.x - tw / 2 - 8, m.y - 22, tw + 16, 20, 10); else g.rect(m.x - tw / 2 - 8, m.y - 22, tw + 16, 20); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(st.name, m.x, m.y - 12);
+  });
+  // tramos relevados (amarillo) y sus puntos
+  tramos().forEach(function (t) {
+    line(trackSorted().filter(function (p) { return p.t >= t.t0 && p.t <= (t.t1 === Infinity ? Date.now() : t.t1); }), '#FFD200', 4);
+    pointsOf(mediaOf(t)).forEach(function (p) { if (p.lat == null) return; var q = X(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(q.x, q.y, 8, 0, 7); g.fill(); g.fillStyle = '#000'; g.font = 'bold 10px -apple-system'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, q.x, q.y + 1); });
+  });
+  var f = GPS.fix; if (f) { var q = X(f); g.fillStyle = 'rgba(10,132,255,.25)'; g.beginPath(); g.arc(q.x, q.y, 13, 0, 7); g.fill(); g.fillStyle = '#0A84FF'; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(q.x, q.y, 6, 0, 7); g.fill(); g.stroke(); }
+  // escala
+  var steps = [50, 100, 200, 500, 1000, 2000, 5000, 10000], st2 = steps.filter(function (v) { return v * GM.sc >= 60; })[0] || 10000;
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(14, H - 18, st2 * GM.sc, 3); g.font = '12px -apple-system'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText(st2 >= 1000 ? st2 / 1000 + ' km' : st2 + ' m', 14, H - 24);
+}
+function renderGeneral(T) {
+  document.getElementById('ptSub').textContent = S.kmz ? S.kmz.stages.length + ' tramos en el KMZ · ' + T.length + ' relevados' : T.length + ' tramos relevados · sin KMZ';
+  if (!GM.fitted) genFit();
+  requestAnimationFrame(drawGeneral);
+  var rows = '';
+  if (S.kmz) rows = S.kmz.stages.map(function (st, i) {
+    var mine = T.filter(function (t) { return stageFor(t) === st; });
+    var np = mine.reduce(function (s, t) { return s + pointsOf(mediaOf(t)).length; }, 0);
+    return '<button class="row" style="width:100%;text-align:left"' + (mine.length ? ' data-sel="' + mine[0].n + '"' : '') + '><span class="dot" style="width:12px;height:12px;border-radius:6px;background:' + STAGE_COLORS[i % STAGE_COLORS.length] + '"></span><span style="flex:1"><b style="font-size:16px">' + esc(st.name) + '</b><br><span class="small muted">' + fmtD(st.len) + (mine.length ? ' · Tramo ' + mine.map(function (t) { return t.n; }).join(', ') + ' · ' + np + ' puntos' : ' · sin relevar') + '</span></span>' + (mine.length ? '<span style="color:var(--accent-soft)">' + svgI('<path d="m9 6 6 6-6 6"/>', 18, 2.2) + '</span>' : '') + '</button>';
+  }).join('');
+  document.getElementById('ptList').innerHTML = rows || '<div class="row muted">Sin KMZ cargado: el mapa muestra solo tu recorrido.</div>';
+}
+(function () {
+  function list() { return Object.keys(GM.ptrs).map(function (k) { return GM.ptrs[k]; }); }
+  gcv.addEventListener('pointerdown', function (e) { gcv.setPointerCapture(e.pointerId); GM.ptrs[e.pointerId] = { x: e.clientX, y: e.clientY }; GM.pinch = null; });
+  gcv.addEventListener('pointermove', function (e) {
+    var o = GM.ptrs[e.pointerId]; if (!o) return; var ps = list();
+    if (ps.length === 1) { GM.cx -= (e.clientX - o.x) / GM.sc; GM.cy -= (e.clientY - o.y) / GM.sc; }
+    o.x = e.clientX; o.y = e.clientY;
+    if (ps.length === 2) { var d = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y); if (GM.pinch) GM.sc = Math.min(8, Math.max(0.001, GM.sc * d / GM.pinch)); GM.pinch = d; }
+    drawGeneral();
+  });
+  function up(e) { delete GM.ptrs[e.pointerId]; GM.pinch = null; }
+  gcv.addEventListener('pointerup', up); gcv.addEventListener('pointercancel', up);
+  gcv.addEventListener('wheel', function (e) { e.preventDefault(); GM.sc = Math.min(8, Math.max(0.001, GM.sc * (e.deltaY < 0 ? 1.15 : 0.87))); drawGeneral(); }, { passive: false });
+  document.getElementById('genFit').onclick = function () { genFit(); drawGeneral(); };
+  document.getElementById('genMe').onclick = function () { var f = GPS.fix; if (!f) { toast('Sin GPS todavía'); return; } if (!GM.fitted) genFit(); var q = gxy(f); GM.cx = q.x; GM.cy = q.y; GM.sc = Math.max(GM.sc, 0.3); drawGeneral(); };
+})();
+document.getElementById('ptList').addEventListener('click', function (e) { var b = e.target.closest('[data-sel]'); if (b && PT.sel === -1) { e.stopPropagation(); PT.sel = +b.dataset.sel; renderPuntos(); } }, true);
 document.getElementById('ptChips').addEventListener('click', function (e) { var b = e.target.closest('[data-sel]'); if (b) { PT.sel = +b.dataset.sel; renderPuntos(); } });
 function drawMini(tr, pts) {
   var c = document.getElementById('miniMap'), r = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
