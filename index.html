@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ojos de Tapir">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="tpr.svg">
+<title>Ojos de Tapir</title>
+<style>
+:root{--accent:#00C0D8;--accent-soft:#7FE3F0;--glass:rgba(28,28,30,.42);--line:rgba(255,255,255,.18);--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#fff;font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+button{font:inherit;color:inherit;border:0;padding:0;background:none;cursor:pointer}
+.g{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);border:.5px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 8px 28px rgba(0,0,0,.22)}
+.tint{background:rgba(0,192,216,.26);border:.5px solid rgba(127,227,240,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);color:#fff}
+.wall{position:fixed;inset:0;background:url(data:image/gif;base64,R0lGODlhAQABAAAAACw=) center/cover,radial-gradient(120% 80% at 20% 10%,#3a4a3a 0%,#1d2620 40%,#0b0f0d 100%);z-index:0}
+.wall::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.2),rgba(0,0,0,.55))}
+.view{position:fixed;inset:0;z-index:1;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--sat) + 14px) 16px calc(var(--sab) + 120px)}
+.view.on{display:block}
+#v-camara{padding:0;overflow:hidden}
+h1{margin:0;font-size:34px;font-weight:700;letter-spacing:-.5px}
+.sub{margin:4px 0 0;font-size:15px;color:#D1D1D6}
+.card{border-radius:24px;padding:16px;margin-top:14px}
+.muted{color:#D1D1D6}
+.small{font-size:13px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:26px;font-size:17px;font-weight:700;width:100%}
+.btn2{display:flex;align-items:center;justify-content:center;gap:6px;height:44px;border-radius:22px;font-size:15px;font-weight:600;width:100%;background:rgba(255,255,255,.12)}
+.btn[disabled],.btn2[disabled]{opacity:.45}
+.row{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px}
+.row+.row::before{content:"";position:absolute;left:14px;right:0;top:0;height:.5px;background:var(--line)}
+.list{border-radius:22px;overflow:hidden;margin-top:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.tile{border-radius:22px;padding:12px 10px;display:flex;flex-direction:column;gap:10px;min-height:96px;text-align:left}
+.tile b{font-size:14px}.tile span{font-size:12px;color:#D1D1D6}
+.dot{width:8px;height:8px;border-radius:4px;display:inline-block;flex:none}
+.chips{display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:2px}
+.chip{height:34px;border-radius:17px;padding:0 14px;font-size:14px;font-weight:600;white-space:nowrap;background:rgba(255,255,255,.12)}
+.chip.on{background:rgba(0,192,216,.3);border:.5px solid rgba(127,227,240,.6)}
+/* tab bar */
+#tabs{position:fixed;left:16px;right:16px;bottom:calc(var(--sab) + 10px);height:64px;border-radius:32px;display:flex;align-items:center;justify-content:space-around;padding:0 4px;z-index:20}
+#tabs button{display:flex;flex-direction:column;align-items:center;gap:2px;width:64px;padding:6px 0;border-radius:26px;font-size:10px;font-weight:600}
+#tabs button.on{background:rgba(255,255,255,.14);color:var(--accent)}
+/* camera */
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111}
+#camShade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,0) 22%,rgba(0,0,0,0) 65%,rgba(0,0,0,.45))}
+#camMsg{position:absolute;left:24px;right:24px;top:40%;text-align:center;font-size:15px;color:#D1D1D6}
+#pill{position:absolute;left:16px;right:72px;top:calc(var(--sat) + 12px);height:44px;border-radius:22px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px}
+#flagBtn{position:absolute;right:16px;top:calc(var(--sat) + 12px);width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.95);animation:glow 2.6s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 8px 2px rgba(255,255,255,.55),0 0 20px 4px rgba(127,227,240,.35),inset 0 0 8px rgba(255,255,255,.3)}50%{box-shadow:0 0 12px 3px rgba(255,255,255,.8),0 0 30px 8px rgba(127,227,240,.55),inset 0 0 10px rgba(255,255,255,.4)}}
+#capsule{position:absolute;left:16px;right:16px;bottom:calc(var(--sab) + 196px);height:60px;border-radius:30px;display:flex;align-items:center;gap:10px;padding:0 14px 0 8px}
+#ptBadge{width:44px;height:44px;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1}
+#ptBadge small{font-size:8px;font-weight:700;letter-spacing:.5px}#ptBadge b{font-size:19px;font-weight:800}
+#wave{display:flex;align-items:center;gap:2px;height:24px}
+#wave i{width:3px;border-radius:2px;background:#fff;height:4px}
+#ctrl{position:absolute;left:16px;right:16px;bottom:calc(var(--sab) + 88px);height:96px;border-radius:48px;display:flex;align-items:center;justify-content:space-between;padding:0 22px}
+#thumb{width:52px;height:52px;border-radius:14px;overflow:hidden;border:1.5px solid rgba(255,255,255,.85);background:rgba(255,255,255,.12);position:relative}
+#thumb img{width:100%;height:100%;object-fit:cover;display:block}
+#thumbN{position:absolute;right:-6px;top:-6px;min-width:22px;height:22px;border-radius:11px;background:var(--accent);color:#001418;font-size:12px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px}
+#shutter{width:78px;height:78px;border-radius:39px;border:4px solid #fff;display:flex;align-items:center;justify-content:center}
+#shutter span{width:62px;height:62px;border-radius:31px;background:#fff;transition:transform .1s}
+#shutter:active span{transform:scale(.9)}
+#mic{width:52px;height:52px;border-radius:26px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center}
+#mic .stop{width:18px;height:18px;border-radius:5px;background:#FF453A;display:none}
+#mic.rec .stop{display:block}#mic.rec svg{display:none}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+/* sheets */
+.dim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;display:none}
+.dim.on{display:block}
+#flagMenu{position:absolute;right:16px;top:calc(var(--sat) + 66px);width:290px;border-radius:22px;overflow:hidden}
+.mi{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left}
+.mi+.mi::before{content:"";position:absolute;left:52px;right:0;top:0;height:.5px;background:rgba(255,255,255,.2)}
+.mi .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(0,192,216,.38)}
+.mi .ic{position:relative;width:26px;display:flex;justify-content:center}
+.mi .tx{position:relative;display:flex;flex-direction:column;gap:2px}.mi .tx b{font-size:16px}.mi .tx span{font-size:12px;opacity:.85}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:88%;overflow-y:auto;border-radius:28px 28px 0 0;padding:18px 16px calc(var(--sab) + 24px);z-index:41}
+.photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:12px}
+.photos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;display:block}
+#viewer{position:fixed;inset:0;background:#000;z-index:60;display:none;align-items:center;justify-content:center}
+#viewer.on{display:flex}#viewer img{max-width:100%;max-height:100%}
+/* map picker */
+#picker{position:fixed;inset:0;z-index:50;display:none;background:#05070a}
+#picker.on{display:block}
+#pcv{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#pTop{position:absolute;left:12px;right:12px;top:calc(var(--sat) + 8px);height:48px;border-radius:24px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:16px}
+#pHint{position:absolute;left:50%;transform:translateX(-50%);top:calc(var(--sat) + 66px);height:32px;border-radius:16px;padding:0 12px;display:flex;align-items:center;font-size:13px;font-weight:600;white-space:nowrap}
+#pPin{position:absolute;left:50%;top:50%;width:48px;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+#pPin .head{width:48px;height:48px;border-radius:24px;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+#pPin .stem{width:2px;height:18px;background:#fff}#pPin .tip{width:10px;height:10px;border-radius:5px;background:#fff;margin-bottom:-5px;box-shadow:0 0 0 4px rgba(255,255,255,.25)}
+#pMe{position:absolute;right:16px;bottom:calc(var(--sab) + 300px);width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center}
+#pSheet{position:absolute;left:12px;right:12px;bottom:calc(var(--sab) + 16px);border-radius:30px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.stat{flex:1;border-radius:14px;background:rgba(255,255,255,.1);padding:8px 10px;font-size:13px;color:#D1D1D6}.stat b{display:block;font-size:17px;color:#fff}
+.switch{width:51px;height:31px;border-radius:16px;background:rgba(255,255,255,.25);position:relative;flex:none}
+.switch::after{content:"";position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:14px;background:#fff;transition:left .2s}
+.switch.on{background:rgba(0,192,216,.6)}.switch.on::after{left:22px}
+#toast{position:fixed;left:50%;top:calc(var(--sat) + 70px);transform:translateX(-50%);z-index:70;border-radius:18px;padding:10px 16px;font-size:14px;font-weight:600;display:none;max-width:86%;text-align:center}
+#toast.on{display:block}
+.facts{height:auto;min-height:280px;display:flex;flex-direction:column;gap:10px}
+.segs{flex:1;display:flex;gap:4px}.segs i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.25)}.segs i.on{background:#fff}
+.round{width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;flex:none}
+canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:14px;background:#000}
+.ver{font-size:11px;color:#8E8E93;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wall"></div>
+
+<!-- INICIO -->
+<section class="view" id="v-inicio">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#D1D1D6">OJOS DE TAPIR</div><h1>Inicio</h1></div>
+    <img src="tpr.svg" alt="Tapir Media" style="height:42px">
+  </div>
+  <div class="card g" id="installCard" style="display:none"><b>Instalá la app en el iPhone</b><div class="small muted" style="margin-top:4px;line-height:1.4">Tocá Compartir → «Agregar a pantalla de inicio». Instalada, el iPhone no borra tus fotos ni tus recorridos.</div></div>
+  <div class="card g" style="display:flex;flex-direction:column;gap:12px">
+    <div><div class="small muted">Relevamiento guardado</div><div id="homeSum" style="font-size:20px;font-weight:700">—</div></div>
+    <button class="btn tint" data-go="camara"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Start</button>
+  </div>
+  <div class="grid4">
+    <button class="tile g" data-go="tramos" data-kmz="1"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><div><b>KMZ</b><br><span>Sin cargar</span></div></button>
+    <button class="tile g" data-go="tramos"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg><div><b>Tramos</b><br><span id="tileTramos">0</span></div></button>
+    <button class="tile g" data-go="puntos"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><div><b>Puntos</b><br><span id="tilePuntos">0</span></div></button>
+    <button class="tile g" data-go="exportar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v6h14v-6"/></svg><div><b>Exportar</b><br><span>Respaldo</span></div></button>
+  </div>
+  <div class="card g facts" id="facts">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:700;letter-spacing:1px;color:var(--accent-soft)">10 DATOS QUE NO NOS FAVORECEN</span><span class="small muted" id="factNum">01 / 10</span></div>
+    <h2 id="factTitle" style="margin:0;font-size:19px;font-weight:800;line-height:1.2"></h2>
+    <p id="factText" style="margin:0;font-size:15px;line-height:1.45;color:#E5E5EA;flex:1"></p>
+    <div style="display:flex;align-items:center;gap:10px"><button class="round" id="factPrev" aria-label="Dato anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button><div class="segs" id="factSegs"></div><button class="round" id="factNext" aria-label="Dato siguiente"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button></div>
+  </div>
+  <div class="ver" id="ver"></div>
+</section>
+
+<!-- CAMARA -->
+<section class="view" id="v-camara">
+  <video id="video" playsinline muted autoplay></video>
+  <div id="camShade"></div>
+  <div id="camMsg"></div>
+  <div id="flash"></div>
+  <div id="pill" class="g"><span id="pillL" style="font-weight:700">Sin tramo iniciado</span><span id="pillR" style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px"></span></div>
+  <button id="flagBtn" class="g" aria-label="Largada o llegada del tramo"></button>
+  <div id="capsule" class="g">
+    <span id="ptBadge" class="tint"><small>PUNTO</small><b id="ptNum">1</b></span>
+    <div id="capInfo" style="display:flex;flex-direction:column;gap:2px;min-width:0"><span id="capA" style="font-size:15px;font-weight:600">Punto nuevo</span><span id="capB" style="font-size:12px;opacity:.85"></span></div>
+    <div id="recInfo" style="display:none;align-items:center;gap:8px"><span class="dot" style="background:#FF453A"></span><div id="wave"></div><span id="recT" style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">0:00</span></div>
+    <span style="width:.5px;height:30px;background:rgba(255,255,255,.35);margin-left:auto;flex:none"></span>
+    <span style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;white-space:nowrap"><span id="sigL" style="display:inline-flex;align-items:center;gap:4px"></span><span id="gpsL" style="display:inline-flex;align-items:center;gap:4px"></span></span>
+  </div>
+  <div id="ctrl" class="g">
+    <button id="thumb" aria-label="Ver puntos"><span id="thumbN"></span></button>
+    <button id="shutter" aria-label="Sacar foto"><span></span></button>
+    <button id="mic" aria-label="Grabar nota de voz"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span class="stop"></span></button>
+  </div>
+  <div class="dim" id="flagDim">
+    <div id="flagMenu" class="g">
+      <div style="padding:12px 14px 8px;font-size:13px;font-weight:600;opacity:.8;display:flex;align-items:center;gap:8px" id="fmTitle"></div>
+      <button class="mi" id="fmHere"><span class="fill" id="fmFill"></span><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span class="tx"><b id="fmHereT">Marcar acá</b><span id="fmHereS">Mantené apretado 3 segundos</span></span></button>
+      <button class="mi" id="fmMap"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg></span><span class="tx"><b>Elegir en el mapa</b><span>Movés el mapa y fijás el punto exacto</span></span></button>
+      <button class="mi" id="fmCancel"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></span><span class="tx"><b>Cancelar</b><span>No cambia nada</span></span></button>
+    </div>
+  </div>
+</section>
+
+<!-- TRAMOS -->
+<section class="view" id="v-tramos">
+  <h1>Tramos</h1><p class="sub" id="trSub"></p>
+  <div class="list g" id="trList"></div>
+  <div class="card g small" style="display:flex;flex-direction:column;gap:10px;font-size:14px" id="trInfo"></div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+    <button class="btn tint" disabled>Crear mapa · próxima etapa</button>
+    <button class="btn2" disabled>Cargar KMZ · próxima etapa</button>
+  </div>
+</section>
+
+<!-- PUNTOS -->
+<section class="view" id="v-puntos">
+  <h1>Puntos</h1><p class="sub" id="ptSub"></p>
+  <div class="chips" id="ptChips"></div>
+  <canvas class="mini g" id="miniMap"></canvas>
+  <div class="list g" id="ptList"></div>
+</section>
+
+<!-- EXPORTAR -->
+<section class="view" id="v-exportar">
+  <h1>Exportar</h1><p class="sub">Todo vive en este iPhone. Hacé un respaldo al terminar cada día.</p>
+  <div class="card g" style="display:flex;flex-direction:column;gap:12px">
+    <div id="exSum" style="font-size:15px;line-height:1.5"></div>
+    <button class="btn tint" id="exZip">Guardar respaldo (.zip)</button>
+    <div class="small muted" id="exMsg"></div>
+  </div>
+  <div class="card g" style="display:flex;flex-direction:column;gap:10px">
+    <b>Mapa en PDF</b>
+    <div class="small muted" style="line-height:1.4">El mapa con fotos, íconos y textos desgrabados llega en las próximas etapas (Google Maps, desgrabación y PDF). Lo que relevés ahora se va a poder usar.</div>
+    <button class="btn2" disabled>Crear mapa · próxima etapa</button>
+  </div>
+  <div class="ver" id="ver2"></div>
+</section>
+
+<!-- TAB BAR -->
+<nav id="tabs" class="g" aria-label="Secciones"></nav>
+
+<!-- POINT DETAIL -->
+<div class="dim" id="ptDim"></div>
+<div class="sheet g" id="ptSheet" style="display:none"></div>
+<div id="viewer"><img alt=""></div>
+
+<!-- MAP PICKER -->
+<div id="picker">
+  <canvas id="pcv"></canvas>
+  <div id="pTop" class="g"><button id="pCancel">Cancelar</button><b id="pTitle" style="display:inline-flex;align-items:center;gap:6px"></b><span style="width:62px"></span></div>
+  <div id="pHint" class="g">Mové el mapa: la bandera queda fija en el centro</div>
+  <div id="pPin"><span class="head g" id="pPinIc"></span><span class="stem"></span><span class="tip"></span></div>
+  <button id="pMe" class="g" aria-label="Centrar en mi ubicación"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg></button>
+  <div id="pSheet" class="g">
+    <div style="display:flex;gap:10px"><div class="stat"><b id="pA">—</b><span id="pAs">del recorrido grabado</span></div><div class="stat"><b id="pB">—</b>de donde estás ahora</div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:15px"><span>Pegar al recorrido</span><button class="switch on" id="pSnap" aria-label="Pegar al recorrido"></button></div>
+    <button class="btn tint" id="pOk">Fijar</button>
+  </div>
+</div>
+
+<div id="toast" class="g"></div>
+
+<script>
+'use strict';
+var VERSION = '1.0.0';
+var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
+
+/* ---------- íconos ---------- */
+var IC = {
+  inicio: '<path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/>',
+  camara: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  tramos: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  puntos: '<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  exportar: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v6h14v-6"/>'
+};
+function svgI(p, s, w) { return '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; }
+function whiteFlag(s) { s = s || 24; return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M6 4h12l-2.5 4.5L18 13H6z" fill="#fff"/></svg>'; }
+function checkerFlag(s) {
+  s = s || 24; var q = '';
+  for (var r = 0; r < 3; r++) for (var c = 0; c < 4; c++) if ((r + c) % 2 === 0) q += '<rect x="' + (6 + c * 3) + '" y="' + (4 + r * 3) + '" width="3" height="3" fill="#000"/>';
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><rect x="6" y="4" width="12" height="9" fill="#fff"/>' + q + '</svg>';
+}
+function sigDot(s) { return '<span class="dot" style="background:' + ({ 'Buena': '#34C759', 'Débil': '#FFD60A', 'Sin datos': '#FF9F0A' }[s] || '#8E8E93') + '"></span>' + (s || '—'); }
+function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+/* ---------- utilidades ---------- */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function hav(a, b) {
+  var R = 6371000, toR = Math.PI / 180;
+  var dLa = (b.lat - a.lat) * toR, dLo = (b.lng - a.lng) * toR;
+  var x = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function fmtD(m) { if (m == null || isNaN(m)) return '—'; m = Math.max(0, m); return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
+function fmtKm(m) { return 'km ' + (Math.max(0, m || 0) / 1000).toFixed(1).replace('.', ','); }
+var toastT;
+function toast(msg, ms) { var t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('on'); }, ms || 2600); }
+function vib(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+/* ---------- base de datos (IndexedDB) ---------- */
+var DB = {
+  db: null,
+  open: function () {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open('ojos-de-tapir', 1);
+      r.onupgradeneeded = function () {
+        var d = r.result;
+        d.createObjectStore('track', { keyPath: 'id', autoIncrement: true });
+        d.createObjectStore('media', { keyPath: 'id' });
+        d.createObjectStore('flags', { keyPath: 'id' });
+      };
+      r.onsuccess = function () { DB.db = r.result; res(); };
+      r.onerror = function () { rej(r.error); };
+    });
+  },
+  tx: function (store) {
+    try { return DB.db.transaction(store, 'readwrite', { durability: 'strict' }); } catch (e) { return DB.db.transaction(store, 'readwrite'); }
+  },
+  put: function (store, v) {
+    return new Promise(function (res, rej) { var t = DB.tx(store); t.objectStore(store).put(v); t.oncomplete = function () { res(); }; t.onerror = function () { rej(t.error); }; t.onabort = function () { rej(t.error); }; });
+  },
+  del: function (store, id) {
+    return new Promise(function (res, rej) { var t = DB.tx(store); t.objectStore(store).delete(id); t.oncomplete = function () { res(); }; t.onerror = function () { rej(t.error); }; });
+  },
+  all: function (store) {
+    return new Promise(function (res, rej) { var r = DB.db.transaction(store, 'readonly').objectStore(store).getAll(); r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; });
+  }
+};
+var S = { track: [], media: [], flags: [] };
+
+/* ---------- GPS y recorrido ---------- */
+var GPS = { fix: null, watch: null, last: null };
+function startGPS() {
+  if (!navigator.geolocation || GPS.watch != null) return;
+  GPS.watch = navigator.geolocation.watchPosition(function (p) {
+    var f = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() };
+    GPS.fix = f;
+    if (f.acc <= 60) {
+      var L = GPS.last;
+      if (!L || hav(L, f) >= 5 || f.t - L.t >= 15000) {
+        GPS.last = f;
+        S.track.push(f);
+        DB.put('track', f).catch(function () {});
+      }
+    }
+    if (cur === 'camara') renderCam();
+  }, function (e) {
+    if (e.code === 1) toast('Activá la ubicación para Ojos de Tapir en Ajustes', 5000);
+  }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+}
+function stopGPS() { if (GPS.watch != null) { navigator.geolocation.clearWatch(GPS.watch); GPS.watch = null; } }
+function trackSorted() { return S.track.slice().sort(function (a, b) { return a.t - b.t; }); }
+var cumCache = null;
+function cum() {
+  if (cumCache && cumCache.n === S.track.length) return cumCache;
+  var tr = trackSorted(), c = [0];
+  for (var i = 1; i < tr.length; i++) c.push(c[i - 1] + hav(tr[i - 1], tr[i]));
+  cumCache = { n: S.track.length, tr: tr, c: c };
+  return cumCache;
+}
+function alongAt(t) {
+  var C = cum(); if (!C.tr.length) return null;
+  var lo = 0, hi = C.tr.length - 1;
+  if (t <= C.tr[0].t) return 0;
+  if (t >= C.tr[hi].t) return C.c[hi];
+  while (hi - lo > 1) { var m = (lo + hi) >> 1; if (C.tr[m].t <= t) lo = m; else hi = m; }
+  var a = C.tr[lo], b = C.tr[hi], k = (t - a.t) / Math.max(1, b.t - a.t);
+  return C.c[lo] + (C.c[hi] - C.c[lo]) * k;
+}
+function nearestTrack(lat, lng) {
+  var C = cum(), best = null, bd = Infinity;
+  for (var i = 0; i < C.tr.length; i++) { var d = hav({ lat: lat, lng: lng }, C.tr[i]); if (d < bd) { bd = d; best = C.tr[i]; } }
+  return best ? { p: best, d: bd } : null;
+}
+
+/* ---------- señal de celular ---------- */
+var SIG = { v: 'Sin datos' };
+function measureSignal() {
+  if (!navigator.onLine) { SIG.v = 'Sin datos'; return Promise.resolve(SIG.v); }
+  var t0 = performance.now(), ctl = ('AbortController' in window) ? new AbortController() : null;
+  var to = setTimeout(function () { if (ctl) ctl.abort(); }, 4000);
+  return fetch('ping.txt?' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined }).then(function (r) {
+    clearTimeout(to); if (!r.ok) throw 0;
+    var ms = performance.now() - t0; SIG.v = ms < 900 ? 'Buena' : 'Débil'; return SIG.v;
+  }).catch(function () { clearTimeout(to); SIG.v = 'Sin datos'; return SIG.v; });
+}
+
+/* ---------- tramos, puntos y distancias ---------- */
+function tramos() {
+  var fl = S.flags.slice().sort(function (a, b) { return a.t - b.t; }), out = [], c = null;
+  fl.forEach(function (f) {
+    if (f.kind === 'start') { if (c) out.push(c); c = { start: f, end: null }; }
+    else { if (c && !c.end) { c.end = f; out.push(c); c = null; } else out.push({ start: null, end: f }); }
+  });
+  if (c) out.push(c);
+  out.forEach(function (t, i) { t.n = i + 1; t.t0 = t.start ? t.start.t : (t.end ? t.end.t : 0); t.t1 = t.end ? t.end.t : Infinity; });
+  return out;
+}
+function openTramo() { var T = tramos(), l = T[T.length - 1]; return l && l.start && !l.end ? l : null; }
+function mediaOf(tr) { return S.media.filter(function (m) { return tr ? (m.t >= tr.t0 && m.t <= tr.t1) : !tramos().some(function (x) { return m.t >= x.t0 && m.t <= x.t1; }); }); }
+function pointsOf(list) {
+  var pts = [], c = null;
+  list.slice().sort(function (a, b) { return a.t - b.t; }).forEach(function (m) {
+    var far = !c || (m.lat != null && c.lat != null && hav(c, m) > RADIUS);
+    if (far) { c = { lat: m.lat, lng: m.lng, t: m.t, signal: m.signal, acc: m.acc, media: [m] }; pts.push(c); }
+    else { c.media.push(m); if (c.lat == null && m.lat != null) { c.lat = m.lat; c.lng = m.lng; } }
+  });
+  pts.forEach(function (p, i) { p.n = i + 1; p.photos = p.media.filter(function (m) { return m.type === 'photo'; }); p.audios = p.media.filter(function (m) { return m.type === 'audio'; }); });
+  return pts;
+}
+function pointDistances(tr, pts) {
+  var a0 = tr && tr.start ? alongAt(tr.start.t) : null, a1 = tr && tr.end ? alongAt(tr.end.t) : null;
+  pts.forEach(function (p, i) {
+    var ap = alongAt(p.t);
+    if (i === 0) { p.from = 'LPE'; p.d = (a0 != null && ap != null) ? ap - a0 : (tr && tr.start && tr.start.lat != null && p.lat != null ? hav(tr.start, p) : null); }
+    else { var q = pts[i - 1], aq = alongAt(q.t); p.from = 'P' + q.n; p.d = (ap != null && aq != null) ? ap - aq : (q.lat != null && p.lat != null ? hav(q, p) : null); }
+    p.toEnd = (a1 != null && ap != null) ? a1 - ap : null;
+  });
+}
+function tramoLen(tr) { if (!tr.start) return null; var a0 = alongAt(tr.start.t), a1 = alongAt(tr.end ? tr.end.t : Date.now()); return (a0 != null && a1 != null) ? a1 - a0 : null; }
+
+/* ---------- navegación ---------- */
+var TABS = [['inicio', 'Inicio'], ['camara', 'Cámara'], ['tramos', 'Tramos'], ['puntos', 'Puntos'], ['exportar', 'Exportar']];
+var cur = null;
+function go(v) {
+  if (v === cur) return;
+  if (cur === 'camara') { stopCam(); if (REC.on) stopRec(); }
+  cur = v;
+  document.querySelectorAll('.view').forEach(function (s) { s.classList.toggle('on', s.id === 'v-' + v); });
+  document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+  if (v === 'camara') { startCam(); renderCam(); }
+  if (v === 'inicio') renderHome();
+  if (v === 'tramos') renderTramos();
+  if (v === 'puntos') renderPuntos();
+  if (v === 'exportar') renderExport();
+  wake();
+}
+document.getElementById('tabs').innerHTML = TABS.map(function (t) { return '<button data-v="' + t[0] + '">' + svgI(IC[t[0]], 22, 1.8) + t[1] + '</button>'; }).join('');
+document.getElementById('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(b.dataset.v); });
+document.addEventListener('click', function (e) { var b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+
+/* ---------- pantalla encendida ---------- */
+var WL = null;
+function wake() {
+  var need = cur === 'camara' || !!openTramo();
+  if (need && !WL && navigator.wakeLock && document.visibilityState === 'visible') {
+    navigator.wakeLock.request('screen').then(function (l) { WL = l; l.addEventListener('release', function () { WL = null; }); }).catch(function () {});
+  } else if (!need && WL) { WL.release(); WL = null; }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') { startGPS(); wake(); if (cur === 'camara') startCam(); }
+  else { if (REC.on) stopRec(); }
+});
+
+/* ---------- INICIO: datos de tapires ---------- */
+var FACTS = [
+  ['50 MILLONES DE AÑOS SIN PROGRESAR', '¿Sabías que los tapires pertenecen a un linaje que existe desde hace decenas de millones de años? Tuvieron tiempo de sobra para evolucionar en algo más interesante. Pero no.'],
+  ['UNA TROMPA DECEPCIONANTE', '¿Sabías que el tapir tiene una pequeña trompa que utiliza para agarrar hojas? Es básicamente un elefante al que le salió todo más o menos.'],
+  ['SOBREPESO SIN BENEFICIOS', '¿Sabías que algunas especies de tapir pueden superar los 300 kilos? A pesar de semejante estructura, no son particularmente intimidantes. Son simplemente grandes.'],
+  ['UNA VIDA SOCIAL LAMENTABLE', '¿Sabías que los tapires son animales mayormente solitarios? Ni siquiera otros tapires parecen encontrarlos demasiado interesantes.'],
+  ['UNA DIETA SIN ALEGRÍAS', '¿Sabías que los tapires son herbívoros y se alimentan de hojas, brotes y frutas? Pueden vivir más de 25 años sin conocer el sabor de una milanesa.'],
+  ['NACEN LINDOS. DESPUÉS SE LES PASA.', '¿Sabías que los tapires nacen con un hermoso pelaje de rayas y manchas? A medida que crecen, lo pierden y adquieren su aspecto definitivo. Una transformación completamente innecesaria.'],
+  ['LA VISTA NO ES SU FUERTE', '¿Sabías que los tapires tienen una visión bastante limitada? Compensan esta deficiencia con un excelente olfato. Algo que tampoco parece haberles servido demasiado.'],
+  ['UN ANIMAL DIFÍCIL DE EXPLICAR', '¿Sabías que los tapires son parientes evolutivos de los caballos y los rinocerontes? De alguna manera, lograron no parecerse favorablemente a ninguno de los dos.'],
+  ['SU MAYOR HABILIDAD ES ESCONDERSE', '¿Sabías que los tapires son excelentes nadadores y pueden permanecer sumergidos para evitar amenazas? Su estrategia de supervivencia consiste, básicamente, en desaparecer.'],
+  ['UNA EXISTENCIA SIN GRANDES AMBICIONES', '¿Sabías que los tapires pasan buena parte de su tiempo buscando alimento, descansando y recorriendo el bosque? No construyen nada, no cazan nada y no parecen tener ningún proyecto a futuro.']
+];
+var fi = 0;
+(function () {
+  var last = -1; try { last = parseInt(localStorage.getItem('ht-fact') || '-1', 10); } catch (e) {}
+  do { fi = Math.floor(Math.random() * FACTS.length); } while (fi === last && FACTS.length > 1);
+  try { localStorage.setItem('ht-fact', String(fi)); } catch (e) {}
+  document.getElementById('factSegs').innerHTML = FACTS.map(function () { return '<i></i>'; }).join('');
+})();
+function showFact() {
+  var f = FACTS[fi];
+  document.getElementById('factNum').textContent = String(fi + 1).padStart(2, '0') + ' / ' + FACTS.length;
+  document.getElementById('factTitle').textContent = f[0];
+  document.getElementById('factText').textContent = f[1];
+  document.querySelectorAll('#factSegs i').forEach(function (x, k) { x.classList.toggle('on', k === fi); });
+}
+function factGo(d) { fi = (fi + d + FACTS.length) % FACTS.length; showFact(); }
+document.getElementById('factPrev').onclick = function () { factGo(-1); };
+document.getElementById('factNext').onclick = function () { factGo(1); };
+(function () {
+  var x0 = null, el = document.getElementById('facts');
+  el.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener('touchend', function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) factGo(dx < 0 ? 1 : -1); x0 = null; });
+})();
+function renderHome() {
+  var T = tramos(), photos = S.media.filter(function (m) { return m.type === 'photo'; }).length;
+  var npts = T.reduce(function (s, t) { return s + pointsOf(mediaOf(t)).length; }, 0);
+  document.getElementById('homeSum').textContent = T.length + (T.length === 1 ? ' tramo' : ' tramos') + ' · ' + npts + ' puntos · ' + photos + ' fotos';
+  document.getElementById('tileTramos').textContent = T.length;
+  document.getElementById('tilePuntos').textContent = npts;
+  var standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  document.getElementById('installCard').style.display = standalone ? 'none' : 'block';
+  showFact();
+}
+
+/* ---------- CÁMARA ---------- */
+var CAM = { stream: null };
+var video = document.getElementById('video');
+function startCam() {
+  if (CAM.stream) return;
+  var msg = document.getElementById('camMsg'); msg.textContent = 'Abriendo cámara…';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg.textContent = 'Este navegador no permite usar la cámara.'; return; }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }, audio: false }).then(function (s) {
+    if (cur !== 'camara') { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+    CAM.stream = s; video.srcObject = s; video.play().catch(function () {}); msg.textContent = '';
+  }).catch(function () { msg.textContent = 'No hay permiso para la cámara. Habilitalo en Ajustes › Safari › Cámara.'; });
+}
+function stopCam() { if (CAM.stream) { CAM.stream.getTracks().forEach(function (t) { t.stop(); }); CAM.stream = null; video.srcObject = null; } }
+function newMedia(type, blob, extra) {
+  var f = GPS.fix, fresh = f && (Date.now() - f.t < 30000);
+  var m = { id: uid(), type: type, t: Date.now(), lat: fresh ? f.lat : null, lng: fresh ? f.lng : null, acc: fresh ? f.acc : null, signal: SIG.v, mime: blob.type, blob: blob };
+  for (var k in extra) m[k] = extra[k];
+  return DB.put('media', m).then(function () { S.media.push(m); measureSignal(); renderCam(); return m; }).catch(function () { toast('¡No se pudo guardar! Revisá el espacio del iPhone.', 5000); });
+}
+document.getElementById('shutter').onclick = function () {
+  if (!CAM.stream || !video.videoWidth) { toast('La cámara todavía no está lista'); return; }
+  var c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  var fl = document.getElementById('flash'); fl.style.transition = 'none'; fl.style.opacity = .8; requestAnimationFrame(function () { fl.style.transition = 'opacity .3s'; fl.style.opacity = 0; });
+  vib(20);
+  c.toBlob(function (b) { if (b) newMedia('photo', b, { w: c.width, h: c.height }); }, 'image/jpeg', 0.9);
+  if (!GPS.fix || Date.now() - GPS.fix.t > 30000) toast('Foto guardada sin GPS: esperá a tener señal de ubicación');
+};
+document.getElementById('thumb').onclick = function () { go('puntos'); };
+
+/* nota de voz */
+var REC = { on: false };
+var waveEl = document.getElementById('wave');
+waveEl.innerHTML = new Array(20).join('<i></i>') + '<i></i>';
+function startRec() {
+  if (!window.MediaRecorder) { toast('Este iPhone no permite grabar audio acá'); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+    var mime = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+    var mr = new MediaRecorder(s, mime ? { mimeType: mime } : undefined), chunks = [];
+    mr.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function () {
+      s.getTracks().forEach(function (t) { t.stop(); });
+      var b = new Blob(chunks, { type: mr.mimeType || mime || 'audio/mp4' });
+      if (b.size) newMedia('audio', b, { dur: Math.round((Date.now() - REC.t0) / 1000), transcribed: false });
+    };
+    var AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), an = ac.createAnalyser();
+    an.fftSize = 64; ac.createMediaStreamSource(s).connect(an);
+    REC = { on: true, mr: mr, ac: ac, an: an, t0: Date.now() };
+    mr.start(1000);
+    document.getElementById('mic').classList.add('rec');
+    renderCam(); vib(30); loopWave();
+  }).catch(function () { toast('No hay permiso para el micrófono'); });
+}
+function stopRec() {
+  if (!REC.on) return;
+  try { REC.mr.stop(); } catch (e) {}
+  try { REC.ac.close(); } catch (e) {}
+  REC.on = false; document.getElementById('mic').classList.remove('rec'); renderCam(); vib(30);
+}
+function loopWave() {
+  if (!REC.on) return;
+  var d = new Uint8Array(REC.an.frequencyBinCount); REC.an.getByteFrequencyData(d);
+  var bars = waveEl.children;
+  for (var i = 0; i < bars.length; i++) { var v = d[i + 1] || 0; bars[i].style.height = (4 + v / 255 * 20) + 'px'; }
+  var s = Math.floor((Date.now() - REC.t0) / 1000);
+  document.getElementById('recT').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  requestAnimationFrame(loopWave);
+}
+document.getElementById('mic').onclick = function () { if (REC.on) stopRec(); else startRec(); };
+
+function renderCam() {
+  var tr = openTramo(), f = GPS.fix;
+  var gpsTxt = f ? '<span class="dot" style="background:' + (f.acc <= 15 ? '#34C759' : f.acc <= 40 ? '#FFD60A' : '#FF9F0A') + '"></span>±' + Math.round(f.acc) + ' m' : '<span class="dot" style="background:#FF453A"></span>Sin GPS';
+  document.getElementById('pillL').textContent = tr ? 'Tramo ' + tr.n : 'Sin tramo iniciado';
+  var a0 = tr ? alongAt(tr.start.t) : null, an = alongAt(Date.now());
+  document.getElementById('pillR').innerHTML = tr ? '<span style="font-weight:500;font-variant-numeric:tabular-nums">' + fmtKm(a0 != null && an != null ? an - a0 : 0) + '</span>' : gpsTxt;
+  document.getElementById('flagBtn').innerHTML = tr ? checkerFlag(24) : whiteFlag(24);
+  document.getElementById('flagBtn').setAttribute('aria-label', tr ? 'Llegada del tramo' : 'Largada del tramo');
+  // punto actual
+  var list = mediaOf(tr), pts = pointsOf(list), last = pts[pts.length - 1], same = last && f && last.lat != null && hav(last, f) <= RADIUS;
+  var n = same ? last.n : pts.length + 1;
+  document.getElementById('ptNum').textContent = n;
+  if (same) {
+    document.getElementById('capA').textContent = last.photos.length + (last.photos.length === 1 ? ' foto' : ' fotos') + ' · ' + last.audios.length + (last.audios.length === 1 ? ' nota' : ' notas');
+  } else document.getElementById('capA').textContent = 'Punto nuevo';
+  var prev = same ? pts[pts.length - 2] : last, ref = prev ? alongAt(prev.t) : a0;
+  var dtxt = '';
+  if (an != null && ref != null) dtxt = fmtD(an - ref) + (prev ? ' desde el punto ' + prev.n : ' desde la largada');
+  else if (f && prev && prev.lat != null) dtxt = fmtD(hav(prev, f)) + ' desde el punto ' + prev.n;
+  document.getElementById('capB').textContent = dtxt;
+  document.getElementById('capInfo').style.display = REC.on ? 'none' : 'flex';
+  document.getElementById('recInfo').style.display = REC.on ? 'flex' : 'none';
+  document.getElementById('sigL').innerHTML = sigDot(SIG.v);
+  document.getElementById('gpsL').innerHTML = gpsTxt;
+  // miniatura
+  var ph = list.filter(function (m) { return m.type === 'photo'; }), lp = ph[ph.length - 1], th = document.getElementById('thumb');
+  var img = th.querySelector('img');
+  if (lp) { if (!img) { img = document.createElement('img'); img.alt = ''; th.insertBefore(img, th.firstChild); } if (img.dataset.id !== lp.id) { img.src = urlOf(lp); img.dataset.id = lp.id; } }
+  else if (img) img.remove();
+  var tn = document.getElementById('thumbN');
+  if (same && last.photos.length) { tn.textContent = last.photos.length; tn.style.display = 'flex'; } else tn.style.display = 'none';
+}
+var URLS = {};
+function urlOf(m) { return URLS[m.id] || (URLS[m.id] = URL.createObjectURL(m.blob)); }
+
+/* banderas: menú, mantener 3 s y mapa */
+var FM = { kind: null, replace: null, timer: null, t0: 0 };
+document.getElementById('flagBtn').onclick = function () {
+  var tr = openTramo(); FM.kind = tr ? 'end' : 'start'; FM.replace = null;
+  var T = tramos(), n = tr ? tr.n : T.length + 1;
+  document.getElementById('fmTitle').innerHTML = (tr ? checkerFlag(16) + 'Llegada' : whiteFlag(16) + 'Largada') + ' del tramo ' + n;
+  document.getElementById('fmHereT').textContent = tr ? 'Marcar llegada acá' : 'Marcar largada acá';
+  document.getElementById('fmHereS').textContent = 'Mantené apretado 3 segundos';
+  document.getElementById('fmFill').style.width = '0';
+  document.getElementById('flagDim').classList.add('on');
+};
+document.getElementById('fmCancel').onclick = function () { document.getElementById('flagDim').classList.remove('on'); };
+document.getElementById('flagDim').addEventListener('click', function (e) { if (e.target.id === 'flagDim') this.classList.remove('on'); });
+(function () {
+  var b = document.getElementById('fmHere'), fill = document.getElementById('fmFill'), sub = document.getElementById('fmHereS'), raf = null;
+  function cancel() { cancelAnimationFrame(raf); raf = null; fill.style.width = '0'; sub.textContent = 'Mantené apretado 3 segundos'; }
+  function step() {
+    var k = Math.min(1, (performance.now() - FM.t0) / 3000);
+    fill.style.width = (k * 100) + '%';
+    sub.textContent = k < 1 ? 'Seguí apretando… ' + Math.ceil(3 - k * 3) : '¡Listo!';
+    if (k >= 1) { raf = null; vib([40, 60, 40]); markHere(); return; }
+    raf = requestAnimationFrame(step);
+  }
+  b.addEventListener('pointerdown', function (e) { e.preventDefault(); FM.t0 = performance.now(); raf = requestAnimationFrame(step); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { b.addEventListener(ev, function () { if (raf) cancel(); }); });
+  b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+function saveFlag(fl) {
+  var p = FM.replace ? DB.del('flags', FM.replace) : Promise.resolve();
+  return p.then(function () {
+    if (FM.replace) S.flags = S.flags.filter(function (x) { return x.id !== FM.replace; });
+    return DB.put('flags', fl);
+  }).then(function () { S.flags.push(fl); cumCache = null; wake(); });
+}
+function markHere() {
+  var f = GPS.fix, fresh = f && Date.now() - f.t < 30000;
+  var fl = { id: uid(), kind: FM.kind, t: Date.now(), lat: fresh ? f.lat : null, lng: fresh ? f.lng : null, manual: false };
+  saveFlag(fl).then(function () {
+    document.getElementById('flagDim').classList.remove('on');
+    var tr = tramos(); toast(FM.kind === 'start' ? 'Largada del tramo ' + tr[tr.length - 1].n + ' marcada' : 'Llegada marcada. ¡Tramo cerrado!');
+    if (!fresh) toast('Marcado sin GPS: ajustalo después en el mapa', 4500);
+    renderCam();
+  }).catch(function () { toast('No se pudo guardar la marca', 4000); });
+}
+document.getElementById('fmMap').onclick = function () { document.getElementById('flagDim').classList.remove('on'); openPicker(FM.kind, null, null); };
+
+/* ---------- selector en el mapa ---------- */
+var P = { on: false, kind: null, cx: 0, cy: 0, sc: 0.5, lat0: 0, lng0: 0, snap: true, ptrs: {}, pinch: null, ctx: null };
+var pcv = document.getElementById('pcv');
+function m2xy(lat, lng) { return { x: (lng - P.lng0) * Math.cos(P.lat0 * Math.PI / 180) * 111320, y: -(lat - P.lat0) * 110540 }; }
+function xy2m(x, y) { return { lat: P.lat0 - y / 110540, lng: P.lng0 + x / (Math.cos(P.lat0 * Math.PI / 180) * 111320) }; }
+function openPicker(kind, replaceId, centerAt) {
+  FM.kind = kind; FM.replace = replaceId;
+  var tr = trackSorted(), f = GPS.fix;
+  var ref = centerAt || (f ? { lat: f.lat, lng: f.lng } : (tr.length ? tr[tr.length - 1] : null));
+  if (!ref) { toast('Todavía no hay recorrido ni GPS para mostrar el mapa', 4000); return; }
+  P.lat0 = ref.lat; P.lng0 = ref.lng; P.cx = 0; P.cy = 0; P.sc = 0.4;
+  var T = tramos(), n = kind === 'start' ? (replaceId ? (T.find(function (t) { return t.start && t.start.id === replaceId; }) || {}).n : T.length + 1) : (replaceId ? (T.find(function (t) { return t.end && t.end.id === replaceId; }) || {}).n : (openTramo() || {}).n);
+  FM.n = n;
+  document.getElementById('pTitle').innerHTML = (kind === 'start' ? whiteFlag(18) + 'Largada' : checkerFlag(18) + 'Llegada') + (n ? ' · Tramo ' + n : '');
+  document.getElementById('pPinIc').innerHTML = kind === 'start' ? whiteFlag(26) : checkerFlag(26);
+  document.getElementById('pOk').textContent = kind === 'start' ? 'Fijar largada acá' : 'Fijar llegada acá';
+  document.getElementById('picker').classList.add('on'); P.on = true; sizePicker(); drawPicker();
+}
+function sizePicker() { var r = window.devicePixelRatio || 1; pcv.width = innerWidth * r; pcv.height = innerHeight * r; P.ctx = pcv.getContext('2d'); P.ctx.setTransform(r, 0, 0, r, 0, 0); }
+function centerTarget() {
+  var c = xy2m(P.cx, P.cy), n = P.snap ? nearestTrack(c.lat, c.lng) : null;
+  return { raw: c, snap: n, pos: n ? { lat: n.p.lat, lng: n.p.lng } : c };
+}
+function drawPicker() {
+  if (!P.on) return;
+  var g = P.ctx, W = innerWidth, H = innerHeight, ox = W / 2, oy = H / 2;
+  function X(p) { var q = m2xy(p.lat, p.lng); return { x: ox + (q.x - P.cx) * P.sc, y: oy + (q.y - P.cy) * P.sc }; }
+  g.fillStyle = '#05070a'; g.fillRect(0, 0, W, H);
+  // cuadrícula cada 100 m / 1 km
+  var step = P.sc > 0.3 ? 100 : 1000; g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
+  var x0 = P.cx - ox / P.sc, x1 = P.cx + ox / P.sc, y0 = P.cy - oy / P.sc, y1 = P.cy + oy / P.sc;
+  for (var gx = Math.floor(x0 / step) * step; gx < x1; gx += step) { var sx = ox + (gx - P.cx) * P.sc; g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx, H); g.stroke(); }
+  for (var gy = Math.floor(y0 / step) * step; gy < y1; gy += step) { var sy = oy + (gy - P.cy) * P.sc; g.beginPath(); g.moveTo(0, sy); g.lineTo(W, sy); g.stroke(); }
+  // recorrido
+  var tr = trackSorted();
+  if (tr.length > 1) { g.strokeStyle = '#FFD200'; g.lineWidth = 5; g.lineJoin = g.lineCap = 'round'; g.beginPath(); tr.forEach(function (p, i) { var s = X(p); if (i) g.lineTo(s.x, s.y); else g.moveTo(s.x, s.y); }); g.stroke(); }
+  // banderas existentes
+  S.flags.forEach(function (fl) { if (fl.lat == null || fl.id === FM.replace) return; var s = X(fl); g.fillStyle = fl.kind === 'start' ? '#fff' : '#000'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(s.x, s.y, 7, 0, 7); g.fill(); g.stroke(); });
+  // puntos
+  pointsOf(S.media).forEach(function (p) { if (p.lat == null) return; var s = X(p); g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(s.x, s.y, 4, 0, 7); g.fill(); });
+  // yo
+  var f = GPS.fix; if (f) { var s = X(f); g.fillStyle = 'rgba(10,132,255,.25)'; g.beginPath(); g.arc(s.x, s.y, 14, 0, 7); g.fill(); g.fillStyle = '#0A84FF'; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(s.x, s.y, 7, 0, 7); g.fill(); g.stroke(); }
+  // punto enganchado
+  var ct = centerTarget();
+  if (ct.snap) { var s2 = X(ct.pos); g.strokeStyle = '#7FE3F0'; g.lineWidth = 3; g.beginPath(); g.arc(s2.x, s2.y, 9, 0, 7); g.stroke(); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(ox, oy); g.lineTo(s2.x, s2.y); g.stroke(); g.setLineDash([]); }
+  // escala
+  var sb = step * P.sc; g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(16, H - 330, sb, 3); g.font = '12px -apple-system'; g.fillText(step >= 1000 ? '1 km' : '100 m', 16, H - 338);
+  // datos
+  var at = ct.snap ? alongAt(ct.snap.p.t) : null, C = cum();
+  document.getElementById('pA').textContent = at != null ? fmtKm(at) : (tr.length ? 'Fuera' : '—');
+  document.getElementById('pAs').textContent = at != null ? 'del recorrido grabado' : 'sin recorrido cerca';
+  document.getElementById('pB').textContent = f ? fmtD(hav(f, ct.pos)) : '—';
+}
+(function () {
+  function pts() { return Object.keys(P.ptrs).map(function (k) { return P.ptrs[k]; }); }
+  pcv.addEventListener('pointerdown', function (e) { pcv.setPointerCapture(e.pointerId); P.ptrs[e.pointerId] = { x: e.clientX, y: e.clientY }; P.pinch = null; });
+  pcv.addEventListener('pointermove', function (e) {
+    var o = P.ptrs[e.pointerId]; if (!o) return;
+    var ps = pts();
+    if (ps.length === 1) { P.cx -= (e.clientX - o.x) / P.sc; P.cy -= (e.clientY - o.y) / P.sc; }
+    o.x = e.clientX; o.y = e.clientY;
+    if (ps.length === 2) { var d = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y); if (P.pinch) P.sc = Math.min(8, Math.max(0.01, P.sc * d / P.pinch)); P.pinch = d; }
+    drawPicker();
+  });
+  function up(e) { delete P.ptrs[e.pointerId]; P.pinch = null; }
+  pcv.addEventListener('pointerup', up); pcv.addEventListener('pointercancel', up);
+  pcv.addEventListener('wheel', function (e) { e.preventDefault(); P.sc = Math.min(8, Math.max(0.01, P.sc * (e.deltaY < 0 ? 1.15 : 0.87))); drawPicker(); }, { passive: false });
+})();
+window.addEventListener('resize', function () { if (P.on) { sizePicker(); drawPicker(); } });
+document.getElementById('pCancel').onclick = function () { P.on = false; document.getElementById('picker').classList.remove('on'); };
+document.getElementById('pSnap').onclick = function () { P.snap = !P.snap; this.classList.toggle('on', P.snap); drawPicker(); };
+document.getElementById('pMe').onclick = function () { var f = GPS.fix; if (!f) return; var q = m2xy(f.lat, f.lng); P.cx = q.x; P.cy = q.y; drawPicker(); };
+document.getElementById('pOk').onclick = function () {
+  var ct = centerTarget(), nr = ct.snap || nearestTrack(ct.raw.lat, ct.raw.lng);
+  var t = nr ? nr.p.t : Date.now();
+  // incluir fotos/notas sacadas en ese mismo lugar justo antes (largada) o después (llegada)
+  S.media.forEach(function (m) {
+    if (m.lat == null || hav(m, ct.pos) > RADIUS * 2) return;
+    if (FM.kind === 'end' && m.t > t && m.t - t < 900000) t = m.t + 1;
+    if (FM.kind === 'start' && m.t < t && t - m.t < 900000) t = m.t - 1;
+  });
+  var err = checkFlagTime(FM.kind, FM.n, t);
+  if (err) { toast(err, 4000); return; }
+  var fl = { id: uid(), kind: FM.kind, t: t, lat: ct.pos.lat, lng: ct.pos.lng, manual: true };
+  saveFlag(fl).then(function () {
+    P.on = false; document.getElementById('picker').classList.remove('on');
+    toast(FM.kind === 'start' ? 'Largada fijada en el mapa' : 'Llegada fijada en el mapa');
+    if (cur === 'camara') renderCam(); if (cur === 'tramos') renderTramos();
+  }).catch(function () { toast('No se pudo guardar la marca', 4000); });
+};
+
+function checkFlagTime(kind, n, t) {
+  var T = tramos(), tr = n ? T[n - 1] : null, prev = n ? T[n - 2] : T[T.length - 1], next = n ? T[n] : null;
+  if (kind === 'end') {
+    if (tr && tr.start && t <= tr.start.t) return 'La llegada tiene que quedar después de la largada del tramo ' + n;
+    if (next && next.start && t >= next.start.t) return 'La llegada se superpone con el tramo ' + (n + 1);
+  } else {
+    if (tr && tr.end && t >= tr.end.t) return 'La largada tiene que quedar antes de la llegada del tramo ' + n;
+    if (prev && prev !== tr && prev.end && t <= prev.end.t) return 'La largada se superpone con el tramo ' + prev.n;
+  }
+  return null;
+}
+
+/* ---------- TRAMOS ---------- */
+function renderTramos() {
+  var T = tramos();
+  document.getElementById('trSub').textContent = T.length ? 'Tocá un tramo para ajustar su largada o llegada.' : 'Todavía no marcaste ningún tramo. Usá la bandera en la cámara.';
+  var html = T.map(function (t) {
+    var pts = pointsOf(mediaOf(t)), ph = pts.reduce(function (s, p) { return s + p.photos.length; }, 0), L = tramoLen(t);
+    var st = !t.start ? '<span style="color:#FF9F0A">Sin largada</span>' : !t.end ? '<span style="color:var(--accent)">En curso</span>' : '<span style="color:#34C759">Completo</span>';
+    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:600">Tramo ' + t.n + '</div><div class="small muted">' + fmtD(L) + ' · ' + pts.length + ' puntos · ' + ph + ' fotos</div></div><div class="small" style="font-weight:600">' + st + '</div></div>' +
+      '<div style="display:flex;gap:8px"><button class="btn2" style="height:36px;font-size:13px" data-adj="start" data-n="' + t.n + '">' + whiteFlag(16) + 'Largada</button><button class="btn2" style="height:36px;font-size:13px" data-adj="end" data-n="' + t.n + '">' + checkerFlag(16) + 'Llegada</button><button class="btn2" style="height:36px;font-size:13px" data-see="' + t.n + '">Puntos</button></div></div>';
+  }).join('');
+  var out = mediaOf(null);
+  if (out.length) html += '<div class="row"><div style="flex:1"><div style="font-size:17px;font-weight:600">Fuera de tramo</div><div class="small muted">' + pointsOf(out).length + ' puntos sin largada/llegada alrededor</div></div><button class="btn2" style="width:auto;padding:0 14px;height:36px;font-size:13px" data-see="0">Ver</button></div>';
+  var L = document.getElementById('trList'); L.innerHTML = html || '<div class="row muted">Sin tramos todavía.</div>';
+  var aud = S.media.filter(function (m) { return m.type === 'audio' && !m.transcribed; }).length;
+  document.getElementById('trInfo').innerHTML =
+    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#34C759">' + svgI('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>', 20, 2) + '</span>Guardado en el iPhone · ' + S.media.filter(function (m) { return m.type === 'photo'; }).length + ' fotos, ' + S.media.filter(function (m) { return m.type === 'audio'; }).length + ' notas, ' + S.track.length + ' posiciones GPS</div>' +
+    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#FF9F0A">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 20, 2) + '</span>' + aud + ' notas de voz por desgrabar (próxima etapa)</div>';
+}
+document.getElementById('trList').addEventListener('click', function (e) {
+  var a = e.target.closest('[data-adj]'), s = e.target.closest('[data-see]');
+  if (a) {
+    var t = tramos()[+a.dataset.n - 1], f = a.dataset.adj === 'start' ? t.start : t.end;
+    var center = f && f.lat != null ? f : null; // sin bandera previa: arranca en tu posición actual
+    openPicker(a.dataset.adj, f ? f.id : null, center);
+  }
+  if (s) { PT.sel = +s.dataset.see; go('puntos'); renderPuntos(); }
+});
+
+/* ---------- PUNTOS ---------- */
+var PT = { sel: null };
+function renderPuntos() {
+  var T = tramos(), out = mediaOf(null);
+  if (PT.sel == null || PT.sel > T.length) PT.sel = T.length ? (openTramo() || T[T.length - 1]).n : 0;
+  var chips = T.map(function (t) { return '<button class="chip' + (PT.sel === t.n ? ' on' : '') + '" data-sel="' + t.n + '">Tramo ' + t.n + '</button>'; }).join('');
+  if (out.length || !T.length) chips += '<button class="chip' + (PT.sel === 0 ? ' on' : '') + '" data-sel="0">Fuera de tramo</button>';
+  document.getElementById('ptChips').innerHTML = chips;
+  var tr = PT.sel ? T[PT.sel - 1] : null, pts = pointsOf(mediaOf(tr));
+  if (tr) pointDistances(tr, pts);
+  document.getElementById('ptSub').textContent = (tr ? 'Tramo ' + tr.n + ' · ' + fmtD(tramoLen(tr)) + ' · ' : '') + pts.length + ' puntos';
+  document.getElementById('ptList').innerHTML = pts.length ? pts.map(function (p, i) {
+    var th = p.photos[0] ? '<img src="' + urlOf(p.photos[0]) + '" alt="" style="width:60px;height:45px;border-radius:8px;object-fit:cover;display:block">' : '<span style="width:60px;height:45px;border-radius:8px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 18, 2) + '</span>';
+    var fin = (i === pts.length - 1 && p.toEnd != null) ? ' · ' + fmtD(p.toEnd) + ' a la llegada' : '';
+    return '<button class="row" style="width:100%;text-align:left" data-pt="' + i + '"><span style="width:26px;height:26px;border-radius:13px;background:#fff;color:#000;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">' + p.n + '</span>' + th +
+      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">' + (p.d != null ? fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : 'Punto ' + p.n) + '</span><span class="small muted">' + p.photos.length + ' fotos · ' + p.audios.length + ' notas' + fin + (p.lat == null ? ' · sin GPS' : '') + '</span></span>' +
+      '<span class="small" style="display:inline-flex;align-items:center;gap:4px;font-weight:600">' + sigDot(p.signal) + '</span></button>';
+  }).join('') : '<div class="row muted">Sin puntos en este tramo.</div>';
+  PT.pts = pts; PT.tr = tr;
+  drawMini(tr, pts);
+}
+document.getElementById('ptChips').addEventListener('click', function (e) { var b = e.target.closest('[data-sel]'); if (b) { PT.sel = +b.dataset.sel; renderPuntos(); } });
+function drawMini(tr, pts) {
+  var c = document.getElementById('miniMap'), r = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  c.width = W * r; c.height = H * r; var g = c.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0);
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  var seg = trackSorted().filter(function (p) { return !tr || (p.t >= tr.t0 && p.t <= (tr.t1 === Infinity ? Date.now() : tr.t1)); });
+  var all = seg.concat(pts.filter(function (p) { return p.lat != null; }));
+  if (!all.length) { g.fillStyle = '#8E8E93'; g.font = '14px -apple-system'; g.textAlign = 'center'; g.fillText('Sin recorrido grabado', W / 2, H / 2); return; }
+  var la = all.map(function (p) { return p.lat; }), lo = all.map(function (p) { return p.lng; });
+  var mla = Math.min.apply(0, la), Mla = Math.max.apply(0, la), mlo = Math.min.apply(0, lo), Mlo = Math.max.apply(0, lo);
+  var k = Math.cos((mla + Mla) / 2 * Math.PI / 180), w = Math.max((Mlo - mlo) * k, 1e-5), h = Math.max(Mla - mla, 1e-5), s = Math.min((W - 40) / w, (H - 40) / h);
+  function X(p) { return { x: W / 2 + ((p.lng - (mlo + Mlo) / 2) * k) * s, y: H / 2 - (p.lat - (mla + Mla) / 2) * s }; }
+  if (seg.length > 1) { g.strokeStyle = '#FFD200'; g.lineWidth = 4; g.lineJoin = g.lineCap = 'round'; g.beginPath(); seg.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); }
+  pts.forEach(function (p) { if (p.lat == null) return; var q = X(p); g.fillStyle = '#fff'; g.beginPath(); g.arc(q.x, q.y, 10, 0, 7); g.fill(); g.fillStyle = '#000'; g.font = 'bold 11px -apple-system'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, q.x, q.y + 1); });
+}
+document.getElementById('ptList').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-pt]'); if (!b) return; var p = PT.pts[+b.dataset.pt];
+  var sh = document.getElementById('ptSheet');
+  sh.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between"><b style="font-size:20px">Punto ' + p.n + (PT.tr ? ' · Tramo ' + PT.tr.n : '') + '</b><button class="round" id="shClose" aria-label="Cerrar">' + svgI('<path d="M6 6l12 12M18 6 6 18"/>', 18, 2.2) + '</button></div>' +
+    '<div class="small muted" style="margin-top:6px">' + new Date(p.t).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' · señal ' + (p.signal || '—') + (p.acc ? ' · GPS ±' + Math.round(p.acc) + ' m' : '') + (p.d != null ? ' · ' + fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : '') + '</div>' +
+    '<div class="photos">' + p.photos.map(function (m) { return '<img src="' + urlOf(m) + '" alt="Foto" data-full="' + m.id + '">'; }).join('') + '</div>' +
+    p.audios.map(function (m) { return '<div style="margin-top:12px"><div class="small muted" style="margin-bottom:4px">Nota de voz · ' + (m.dur || 0) + ' s · se desgraba en la próxima etapa</div><audio controls src="' + urlOf(m) + '" style="width:100%"></audio></div>'; }).join('');
+  sh.style.display = 'block'; document.getElementById('ptDim').classList.add('on');
+});
+function closeSheet() { document.getElementById('ptSheet').style.display = 'none'; document.getElementById('ptDim').classList.remove('on'); }
+document.getElementById('ptDim').onclick = closeSheet;
+document.getElementById('ptSheet').addEventListener('click', function (e) {
+  if (e.target.closest('#shClose')) closeSheet();
+  var im = e.target.closest('[data-full]'); if (im) { var v = document.getElementById('viewer'); v.querySelector('img').src = im.src; v.classList.add('on'); }
+});
+document.getElementById('viewer').onclick = function () { this.classList.remove('on'); };
+
+/* ---------- EXPORTAR: respaldo .zip ---------- */
+var CRC = (function () { var t = []; for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { var c = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {
+  var enc = new TextEncoder(), parts = [], central = [], off = 0;
+  files.forEach(function (f) {
+    var name = enc.encode(f.name), d = f.data, crc = crc32(d);
+    var h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, name.length, true);
+    parts.push(h.buffer, name, d);
+    var c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+    c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(c.buffer, name);
+    off += 30 + name.length + d.length;
+  });
+  var csize = central.reduce(function (s, p) { return s + (p.byteLength || p.length); }, 0);
+  var e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
+  return new Blob(parts.concat(central, [e.buffer]), { type: 'application/zip' });
+}
+function renderExport() {
+  var ph = S.media.filter(function (m) { return m.type === 'photo'; }), au = S.media.filter(function (m) { return m.type === 'audio'; });
+  var mb = S.media.reduce(function (s, m) { return s + (m.blob ? m.blob.size : 0); }, 0) / 1048576;
+  document.getElementById('exSum').innerHTML = '<b>' + tramos().length + ' tramos</b> · ' + ph.length + ' fotos · ' + au.length + ' notas de voz · ' + S.track.length + ' posiciones GPS<br><span class="muted small">Peso aproximado: ' + mb.toFixed(1).replace('.', ',') + ' MB</span>';
+  if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(function (p) { document.getElementById('exMsg').textContent = p ? 'El iPhone marcó estos datos como permanentes.' : 'Instalá la app en la pantalla de inicio para que el iPhone no borre los datos.'; });
+}
+document.getElementById('exZip').onclick = function () {
+  var btn = this; btn.disabled = true; btn.textContent = 'Armando respaldo…';
+  var files = [], meta = { app: 'Ojos de Tapir', version: VERSION, creado: new Date().toISOString(), radioPuntos: RADIUS, recorrido: trackSorted(), banderas: S.flags, archivos: [] };
+  var jobs = S.media.slice().sort(function (a, b) { return a.t - b.t; }).map(function (m, i) {
+    var ext = m.type === 'photo' ? 'jpg' : (/webm/.test(m.mime) ? 'webm' : 'm4a');
+    var name = (m.type === 'photo' ? 'fotos/' : 'notas/') + new Date(m.t).toISOString().replace(/[:.]/g, '-') + '_' + m.id + '.' + ext;
+    var rec = {}; for (var k in m) if (k !== 'blob') rec[k] = m[k]; rec.archivo = name; meta.archivos.push(rec);
+    return m.blob.arrayBuffer().then(function (ab) { files.push({ name: name, data: new Uint8Array(ab) }); });
+  });
+  Promise.all(jobs).then(function () {
+    files.unshift({ name: 'relevamiento.json', data: new TextEncoder().encode(JSON.stringify(meta, null, 1)) });
+    var zip = makeZip(files), fname = 'ojos-de-tapir_' + new Date().toISOString().slice(0, 10) + '.zip';
+    var file = new File([zip], fname, { type: 'application/zip' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: fname }).catch(function () {});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(zip); a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+  }).catch(function () { toast('No se pudo armar el respaldo', 4000); }).then(function () { btn.disabled = false; btn.textContent = 'Guardar respaldo (.zip)'; });
+};
+
+/* ---------- arranque ---------- */
+document.getElementById('ver').textContent = 'Ojos de Tapir v' + VERSION;
+document.getElementById('ver2').textContent = 'Ojos de Tapir v' + VERSION;
+DB.open().then(function () { return Promise.all([DB.all('track'), DB.all('media'), DB.all('flags')]); }).then(function (r) {
+  S.track = r[0]; S.media = r[1]; S.flags = r[2];
+  var tr = trackSorted(); GPS.last = tr[tr.length - 1] || null;
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+  startGPS(); measureSignal(); setInterval(function () { measureSignal().then(function () { if (cur === 'camara') renderCam(); }); }, 20000);
+  go(openTramo() ? 'camara' : 'inicio');
+}).catch(function () { toast('No se pudo abrir el almacenamiento del iPhone', 6000); go('inicio'); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+window.addEventListener('online', function () { measureSignal(); });
+window.addEventListener('offline', function () { SIG.v = 'Sin datos'; if (cur === 'camara') renderCam(); });
+</script>
+</body>
+</html>
