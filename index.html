@@ -181,7 +181,7 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
   <div class="list g" id="trList"></div>
   <div class="card g small" style="display:flex;flex-direction:column;gap:10px;font-size:14px" id="trInfo"></div>
   <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
-    <button class="btn tint" disabled>Crear mapa · próxima etapa</button>
+    <button class="btn tint" data-go="exportar">Crear mapa PDF</button>
   </div>
 </section>
 
@@ -208,8 +208,14 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
   </div>
   <div class="card g" style="display:flex;flex-direction:column;gap:10px">
     <b>Mapa en PDF</b>
-    <div class="small muted" style="line-height:1.4">El mapa con fotos, íconos y textos desgrabados llega en las próximas etapas (Google Maps, desgrabación y PDF). Lo que relevés ahora se va a poder usar.</div>
-    <button class="btn2" disabled>Crear mapa · próxima etapa</button>
+    <div class="small muted" style="line-height:1.4">Una hoja con el mapa general y una hoja por tramo, con el mapa, la topografía y la ficha de cada punto. Para las curvas de nivel hace falta señal.</div>
+    <button class="btn tint" id="pdfBtn">Crear mapa PDF</button>
+    <div class="small muted" id="pdfMsg"></div>
+  </div>
+  <div class="card g" style="display:flex;flex-direction:column;gap:10px">
+    <b>Nueva carrera</b>
+    <div class="small muted" style="line-height:1.4">Borra todo lo de este iPhone (KMZ, fotos, notas, recorrido y banderas) para empezar una carrera de cero. Guardá el respaldo antes.</div>
+    <button class="btn2" id="resetBtn" style="color:#FF6961">Nueva carrera…</button>
   </div>
   <div class="ver" id="ver2"></div>
 </section>
@@ -221,6 +227,13 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 <div class="dim" id="ptDim"></div>
 <div class="sheet g" id="ptSheet" style="display:none"></div>
 <div id="viewer"><img alt=""></div>
+<div class="dim" id="resetDim"><div class="sheet g" style="display:flex;flex-direction:column;gap:12px">
+  <b style="font-size:20px">¿Empezar una carrera nueva?</b>
+  <div class="small muted" id="resetSum" style="line-height:1.45"></div>
+  <button class="btn tint" id="resetZip">Guardar respaldo primero</button>
+  <button class="mi g" id="resetHold" style="border-radius:22px;justify-content:center;border:.5px solid rgba(255,105,97,.6)"><span class="fill" id="resetFill" style="background:rgba(255,69,58,.45)"></span><span class="tx" style="align-items:center"><b style="color:#FF6961">Borrar todo y empezar de cero</b><span id="resetSub">Mantené apretado 3 segundos</span></span></button>
+  <button class="btn2" id="resetCancel">Cancelar</button>
+</div></div>
 
 <!-- MAP PICKER -->
 <div id="picker">
@@ -238,9 +251,10 @@ canvas.mini{width:100%;height:200px;border-radius:18px;display:block;margin-top:
 
 <div id="toast" class="g"></div>
 
+<script src="jspdf.umd.min.js"></script>
 <script>
 'use strict';
-var VERSION = '1.3.0';
+var VERSION = '1.5.0';
 var RADIUS = 30; // metros: fotos dentro de este radio = mismo punto
 
 /* ---------- íconos ---------- */
@@ -259,6 +273,7 @@ function checkerFlag(s) {
   return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><rect x="6" y="4" width="12" height="9" fill="#fff"/>' + q + '</svg>';
 }
 function sigDot(s) { if (s == null) return '<span style="color:#8E8E93;font-weight:500">importada</span>'; return '<span class="dot" style="background:' + ({ 'Buena': '#34C759', 'Débil': '#FFD60A', 'Sin datos': '#FF9F0A' }[s] || '#8E8E93') + '"></span>' + (s || '—'); }
+function pl(n, a, b) { return n + ' ' + (n === 1 ? a : b); }
 function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
 /* ---------- utilidades ---------- */
@@ -534,7 +549,7 @@ document.getElementById('factNext').onclick = function () { factGo(1); };
 function renderHome() {
   var T = allTramos(), photos = S.media.filter(function (m) { return m.type === 'photo'; }).length;
   var npts = T.reduce(function (s, t) { return s + ptsOfTramo(t).length; }, 0);
-  document.getElementById('homeSum').textContent = T.length + (T.length === 1 ? ' tramo' : ' tramos') + ' · ' + npts + ' puntos · ' + photos + ' fotos';
+  document.getElementById('homeSum').textContent = T.length + (T.length === 1 ? ' tramo' : ' tramos') + ' · ' + pl(npts, 'punto', 'puntos') + ' · ' + pl(photos, 'foto', 'fotos');
   document.getElementById('tileTramos').textContent = T.length;
   document.getElementById('tilePuntos').textContent = npts;
   document.getElementById('tileKmz').textContent = S.kmz ? S.kmz.stages.length + ' tramos' : 'Sin cargar';
@@ -1016,14 +1031,14 @@ document.getElementById('impFile').addEventListener('change', function () {
       return pr.then(function () { msg.textContent = 'Importando ' + (done + 1) + ' de ' + total + '…'; return task().catch(function () { stats.bad++; }); }).then(function () { done++; });
     }, Promise.resolve());
   }).then(function () {
-    var parts = [stats.ok + ' fotos importadas'];
+    var parts = [pl(stats.ok, 'foto importada', 'fotos importadas')];
     if (stats.dup) parts.push(stats.dup + ' ya estaban');
     if (stats.nogps) parts.push(stats.nogps + ' sin GPS (quedan fuera de tramo)');
     if (stats.out) parts.push(stats.out + ' lejos de los tramos del KMZ');
     if (stats.bad) parts.push(stats.bad + ' no se pudieron leer');
     if (!S.kmz && stats.ok) parts.push('cargá el KMZ para ubicarlas en sus tramos');
     msg.textContent = parts.join(' · ') + '.';
-    toast(stats.ok + ' fotos importadas', 3000);
+    toast(pl(stats.ok, 'foto importada', 'fotos importadas'), 3000);
     renderTramos();
   }).catch(function (e) { msg.textContent = e.message || 'No se pudieron importar las fotos'; });
 });
@@ -1049,17 +1064,17 @@ function renderTramos() {
     var pts = ptsOfTramo(t), ph = pts.reduce(function (s, p) { return s + p.photos.length; }, 0), L = tramoLen(t);
     var st = !t.start ? '<span style="color:#FF9F0A">Sin largada</span>' : !t.end ? '<span style="color:var(--accent)">En curso</span>' : '<span style="color:#34C759">Completo</span>';
     var sg = tramoStage(t);
-    if (t.virtual) return '<div class="row"><div style="flex:1"><div style="font-size:17px;font-weight:600">' + esc(sg.name) + ' <span class="small" style="color:var(--accent-soft)">· importadas</span></div><div class="small muted">' + fmtD(sg.len) + ' · ' + pts.length + ' puntos · ' + ph + ' fotos</div></div><button class="btn2" style="width:auto;padding:0 14px;height:36px;font-size:13px" data-see="' + t.n + '">Puntos</button></div>';
-    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:600">Tramo ' + t.n + (sg ? ' <span style="color:var(--accent-soft);font-weight:600">· ' + esc(sg.name) + '</span>' : '') + '</div><div class="small muted">' + fmtD(L) + ' · ' + pts.length + ' puntos · ' + ph + ' fotos</div></div><div class="small" style="font-weight:600">' + st + '</div></div>' +
+    if (t.virtual) return '<div class="row"><div style="flex:1"><div style="font-size:17px;font-weight:600">' + esc(sg.name) + ' <span class="small" style="color:var(--accent-soft)">· importadas</span></div><div class="small muted">' + fmtD(sg.len) + ' · ' + pl(pts.length, 'punto', 'puntos') + ' · ' + pl(ph, 'foto', 'fotos') + '</div></div><button class="btn2" style="width:auto;padding:0 14px;height:36px;font-size:13px" data-see="' + t.n + '">Puntos</button></div>';
+    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:10px"><div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:600">Tramo ' + t.n + (sg ? ' <span style="color:var(--accent-soft);font-weight:600">· ' + esc(sg.name) + '</span>' : '') + '</div><div class="small muted">' + fmtD(L) + ' · ' + pl(pts.length, 'punto', 'puntos') + ' · ' + pl(ph, 'foto', 'fotos') + '</div></div><div class="small" style="font-weight:600">' + st + '</div></div>' +
       '<div style="display:flex;gap:8px"><button class="btn2" style="height:36px;font-size:13px" data-adj="start" data-n="' + t.n + '">' + whiteFlag(16) + 'Largada</button><button class="btn2" style="height:36px;font-size:13px" data-adj="end" data-n="' + t.n + '">' + checkerFlag(16) + 'Llegada</button><button class="btn2" style="height:36px;font-size:13px" data-see="' + t.n + '">Puntos</button></div></div>';
   }).join('');
   var out = mediaOf(null);
-  if (out.length) html += '<div class="row"><div style="flex:1"><div style="font-size:17px;font-weight:600">Fuera de tramo</div><div class="small muted">' + pointsOf(out).length + ' puntos sin largada/llegada alrededor</div></div><button class="btn2" style="width:auto;padding:0 14px;height:36px;font-size:13px" data-see="0">Ver</button></div>';
+  if (out.length) html += '<div class="row"><div style="flex:1"><div style="font-size:17px;font-weight:600">Fuera de tramo</div><div class="small muted">' + pl(pointsOf(out).length, 'punto', 'puntos') + ' sin largada/llegada alrededor</div></div><button class="btn2" style="width:auto;padding:0 14px;height:36px;font-size:13px" data-see="0">Ver</button></div>';
   var L = document.getElementById('trList'); L.innerHTML = html || '<div class="row muted">Sin tramos todavía.</div>';
   var aud = S.media.filter(function (m) { return m.type === 'audio' && !m.transcribed; }).length;
   document.getElementById('trInfo').innerHTML =
-    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#34C759">' + svgI('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>', 20, 2) + '</span>Guardado en el iPhone · ' + S.media.filter(function (m) { return m.type === 'photo'; }).length + ' fotos, ' + S.media.filter(function (m) { return m.type === 'audio'; }).length + ' notas, ' + S.track.length + ' posiciones GPS</div>' +
-    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#FF9F0A">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 20, 2) + '</span>' + aud + ' notas de voz por desgrabar (próxima etapa)</div>';
+    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#34C759">' + svgI('<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>', 20, 2) + '</span>Guardado en el iPhone · ' + pl(S.media.filter(function (m) { return m.type === 'photo'; }).length, 'foto', 'fotos') + ', ' + pl(S.media.filter(function (m) { return m.type === 'audio'; }).length, 'nota', 'notas') + ', ' + S.track.length + ' posiciones GPS</div>' +
+    '<div style="display:flex;gap:10px;align-items:center"><span style="color:#FF9F0A">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 20, 2) + '</span>' + pl(aud, 'nota', 'notas') + ' de voz por desgrabar (próxima etapa)</div>';
 }
 document.getElementById('trList').addEventListener('click', function (e) {
   var a = e.target.closest('[data-adj]'), s = e.target.closest('[data-see]');
@@ -1085,12 +1100,12 @@ function renderPuntos() {
   if (gen) { renderGeneral(T); return; }
   var tr = PT.sel ? T[PT.sel - 1] : null, sgn = tramoStage(tr), pts = pointsOf(mediaOf(tr), sgn);
   if (tr) pointDistances(tr, pts, sgn);
-  document.getElementById('ptSub').textContent = (tr ? (tr.virtual ? esc(sgn.name) + ' (fotos importadas)' : 'Tramo ' + tr.n + (sgn ? ' (' + sgn.name + ')' : ''))  + ' · ' + fmtD(tramoLen(tr)) + ' · ' : '') + pts.length + ' puntos';
+  document.getElementById('ptSub').textContent = (tr ? (tr.virtual ? esc(sgn.name) + ' (fotos importadas)' : 'Tramo ' + tr.n + (sgn ? ' (' + sgn.name + ')' : ''))  + ' · ' + fmtD(tramoLen(tr)) + ' · ' : '') + pl(pts.length, 'punto', 'puntos');
   document.getElementById('ptList').innerHTML = pts.length ? pts.map(function (p, i) {
     var th = p.photos[0] ? '<img src="' + urlOf(p.photos[0]) + '" alt="" style="width:60px;height:45px;border-radius:8px;object-fit:cover;display:block">' : '<span style="width:60px;height:45px;border-radius:8px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">' + svgI('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>', 18, 2) + '</span>';
     var fin = (i === pts.length - 1 && p.toEnd != null) ? ' · ' + fmtD(p.toEnd) + ' a la llegada' : '';
     return '<button class="row" style="width:100%;text-align:left" data-pt="' + i + '"><span style="width:26px;height:26px;border-radius:13px;background:#fff;color:#000;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">' + p.n + '</span>' + th +
-      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">' + (p.d != null ? fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : 'Punto ' + p.n) + '</span><span class="small muted">' + p.photos.length + ' fotos · ' + p.audios.length + ' notas' + fin + (p.lat == null ? ' · sin GPS' : '') + '</span></span>' +
+      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">' + (p.d != null ? fmtD(p.d) + ' desde ' + (p.from === 'LPE' ? 'la largada' : 'el ' + p.from) : 'Punto ' + p.n) + '</span><span class="small muted">' + pl(p.photos.length, 'foto', 'fotos') + ' · ' + pl(p.audios.length, 'nota', 'notas') + fin + (p.lat == null ? ' · sin GPS' : '') + '</span></span>' +
       '<span class="small" style="display:inline-flex;align-items:center;gap:4px;font-weight:600">' + sigDot(p.signal) + '</span></button>';
   }).join('') : '<div class="row muted">Sin puntos en este tramo.</div>';
   PT.pts = pts; PT.tr = tr;
@@ -1159,7 +1174,7 @@ function renderGeneral(T) {
   if (S.kmz) rows = S.kmz.stages.map(function (st, i) {
     var mine = T.filter(function (t) { return tramoStage(t) === st; });
     var np = mine.reduce(function (s, t) { return s + ptsOfTramo(t).length; }, 0);
-    return '<button class="row" style="width:100%;text-align:left"' + (mine.length ? ' data-sel="' + mine[0].n + '"' : '') + '><span class="dot" style="width:12px;height:12px;border-radius:6px;background:' + STAGE_COLORS[i % STAGE_COLORS.length] + '"></span><span style="flex:1"><b style="font-size:16px">' + esc(st.name) + '</b><br><span class="small muted">' + fmtD(st.len) + (mine.length ? ' · ' + mine.map(function (t) { return t.virtual ? 'importadas' : 'Tramo ' + t.n; }).join(', ') + ' · ' + np + ' puntos' : ' · sin relevar') + '</span></span>' + (mine.length ? '<span style="color:var(--accent-soft)">' + svgI('<path d="m9 6 6 6-6 6"/>', 18, 2.2) + '</span>' : '') + '</button>';
+    return '<button class="row" style="width:100%;text-align:left"' + (mine.length ? ' data-sel="' + mine[0].n + '"' : '') + '><span class="dot" style="width:12px;height:12px;border-radius:6px;background:' + STAGE_COLORS[i % STAGE_COLORS.length] + '"></span><span style="flex:1"><b style="font-size:16px">' + esc(st.name) + '</b><br><span class="small muted">' + fmtD(st.len) + (mine.length ? ' · ' + mine.map(function (t) { return t.virtual ? 'importadas' : 'Tramo ' + t.n; }).join(', ') + ' · ' + pl(np, 'punto', 'puntos') : ' · sin relevar') + '</span></span>' + (mine.length ? '<span style="color:var(--accent-soft)">' + svgI('<path d="m9 6 6 6-6 6"/>', 18, 2.2) + '</span>' : '') + '</button>';
   }).join('');
   document.getElementById('ptList').innerHTML = rows || '<div class="row muted">Sin KMZ cargado: el mapa muestra solo tu recorrido.</div>';
 }
@@ -1239,7 +1254,7 @@ function makeZip(files) {
 function renderExport() {
   var ph = S.media.filter(function (m) { return m.type === 'photo'; }), au = S.media.filter(function (m) { return m.type === 'audio'; });
   var mb = S.media.reduce(function (s, m) { return s + (m.blob ? m.blob.size : 0); }, 0) / 1048576;
-  document.getElementById('exSum').innerHTML = '<b>' + allTramos().length + ' tramos</b> · ' + ph.length + ' fotos · ' + au.length + ' notas de voz · ' + S.track.length + ' posiciones GPS<br><span class="muted small">Peso aproximado: ' + mb.toFixed(1).replace('.', ',') + ' MB</span>';
+  document.getElementById('exSum').innerHTML = '<b>' + allTramos().length + ' tramos</b> · ' + pl(ph.length, 'foto', 'fotos') + ' · ' + pl(au.length, 'nota', 'notas') + ' de voz · ' + S.track.length + ' posiciones GPS<br><span class="muted small">Peso aproximado: ' + mb.toFixed(1).replace('.', ',') + ' MB</span>';
   if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(function (p) { document.getElementById('exMsg').textContent = p ? 'El iPhone marcó estos datos como permanentes.' : 'Instalá la app en la pantalla de inicio para que el iPhone no borre los datos.'; });
 }
 document.getElementById('exZip').onclick = function () {
@@ -1262,6 +1277,268 @@ document.getElementById('exZip').onclick = function () {
     });
   }).catch(function () { toast('No se pudo armar el respaldo', 4000); }).then(function () { btn.disabled = false; btn.textContent = 'Guardar respaldo (.zip)'; });
 };
+
+
+/* ---------- mapa en PDF ---------- */
+var PW = 794, PH = 1123, PK = 1.5625; // A4 en px de diseño; el canvas va a 1240x1754 (150 dpi)
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function newPage() {
+  var c = document.createElement('canvas'); c.width = Math.round(PW * PK); c.height = Math.round(PH * PK);
+  var g = c.getContext('2d'); g.scale(PK, PK);
+  var gr = g.createLinearGradient(0, 0, 0, PH); gr.addColorStop(0, '#1a221d'); gr.addColorStop(.5, '#111316'); gr.addColorStop(1, '#0b0d0f');
+  g.fillStyle = gr; g.fillRect(0, 0, PW, PH);
+  return { c: c, g: g };
+}
+function font(g, w, px) { g.font = w + ' ' + px + 'px -apple-system, "SF Pro Text", Helvetica, Arial, sans-serif'; }
+function wrap(g, text, x, y, maxW, lh, maxLines) {
+  var words = String(text).split(/\s+/), line = '', n = 0;
+  for (var i = 0; i < words.length; i++) {
+    var t = line ? line + ' ' + words[i] : words[i];
+    if (g.measureText(t).width > maxW && line) {
+      n++; if (n === maxLines) { while (g.measureText(line + '…').width > maxW && line) line = line.slice(0, -1); g.fillText(line + '…', x, y); return; }
+      g.fillText(line, x, y); y += lh; line = words[i];
+    } else line = t;
+  }
+  if (line) g.fillText(line, x, y);
+}
+function header(P, title, sub, right1, right2) {
+  var g = P.g; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  font(g, '800', 30); g.fillStyle = '#fff'; g.fillText(title, 40, 78);
+  font(g, '500', 13); g.fillStyle = '#D1D1D6'; g.fillText(sub, 40, 98);
+  g.textAlign = 'right'; font(g, '700', 12); g.fillStyle = '#7FE3F0'; g.fillText('Ojos de Tapir', PW - 40, 72);
+  font(g, '500', 12); g.fillStyle = '#D1D1D6'; g.fillText(right1 || '', PW - 40, 90); if (right2) g.fillText(right2, PW - 40, 106);
+  g.textAlign = 'left';
+}
+/* relieve: teselas de elevación libres (Terrarium) -> curvas de nivel */
+function tileXY(lat, lng, z) { var n = Math.pow(2, z), x = (lng + 180) / 360 * n, r = lat * Math.PI / 180; return { x: x, y: (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n }; }
+function loadImg(url) { return new Promise(function (res, rej) { var im = new Image(); im.crossOrigin = 'anonymous'; im.onload = function () { res(im); }; im.onerror = rej; im.src = url; setTimeout(rej, 12000); }); }
+function fetchDEM(b, mpp) {
+  // b: {n,s,e,w}; devuelve fn(lat,lng)->metros o null
+  if (!navigator.onLine) return Promise.resolve(null);
+  var lat = (b.n + b.s) / 2, z = 14;
+  while (z > 8 && 156543 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z) < mpp * 0.8) z--;
+  var a, c, cnt;
+  for (;;) { a = tileXY(b.n, b.w, z); c = tileXY(b.s, b.e, z); cnt = (Math.floor(c.x) - Math.floor(a.x) + 1) * (Math.floor(c.y) - Math.floor(a.y) + 1); if (cnt <= 30 || z <= 8) break; z--; }
+  var x0 = Math.floor(a.x), y0 = Math.floor(a.y), x1 = Math.floor(c.x), y1 = Math.floor(c.y), W = (x1 - x0 + 1) * 256, H = (y1 - y0 + 1) * 256;
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var g = cv.getContext('2d'), jobs = [];
+  for (var tx = x0; tx <= x1; tx++) for (var ty = y0; ty <= y1; ty++) (function (tx, ty) {
+    jobs.push(loadImg('https://s3.amazonaws.com/elevation-tiles-prod/terrarium/' + z + '/' + tx + '/' + ty + '.png').then(function (im) { g.drawImage(im, (tx - x0) * 256, (ty - y0) * 256); }));
+  })(tx, ty);
+  return Promise.all(jobs).then(function () {
+    var d = g.getImageData(0, 0, W, H).data;
+    return function (la, ln) {
+      var t = tileXY(la, ln, z), px = (t.x - x0) * 256, py = (t.y - y0) * 256;
+      if (px < 0 || py < 0 || px >= W - 1 || py >= H - 1) return null;
+      var ix = Math.floor(px), iy = Math.floor(py), fx = px - ix, fy = py - iy;
+      function e(x, y) { var i = (y * W + x) * 4; return d[i] * 256 + d[i + 1] + d[i + 2] / 256 - 32768; }
+      return e(ix, iy) * (1 - fx) * (1 - fy) + e(ix + 1, iy) * fx * (1 - fy) + e(ix, iy + 1) * (1 - fx) * fy + e(ix + 1, iy + 1) * fx * fy;
+    };
+  }).catch(function () { return null; });
+}
+function drawContours(g, x, y, w, h, toLL, dem) {
+  var cs = 3, nx = Math.ceil(w / cs) + 1, ny = Math.ceil(h / cs) + 1, Z = new Float32Array(nx * ny), mn = Infinity, mx = -Infinity;
+  for (var j = 0; j < ny; j++) for (var i = 0; i < nx; i++) { var ll = toLL(x + i * cs, y + j * cs), v = dem(ll.lat, ll.lng); if (v == null) v = NaN; Z[j * nx + i] = v; if (v < mn) mn = v; if (v > mx) mx = v; }
+  if (!isFinite(mn) || mx - mn < 2) return;
+  var iv = [2, 5, 10, 20, 25, 50, 100, 200].filter(function (k) { return (mx - mn) / k <= 45; })[0] || 200;
+  for (var lev = Math.ceil(mn / iv) * iv; lev <= mx; lev += iv) {
+    var idx = Math.round(lev / iv) % 5 === 0;
+    g.strokeStyle = idx ? 'rgba(218,218,218,.55)' : 'rgba(201,201,201,.28)'; g.lineWidth = idx ? 1.1 : .6; g.beginPath();
+    for (var j2 = 0; j2 < ny - 1; j2++) for (var i2 = 0; i2 < nx - 1; i2++) {
+      var a = Z[j2 * nx + i2], b2 = Z[j2 * nx + i2 + 1], c2 = Z[(j2 + 1) * nx + i2 + 1], d2 = Z[(j2 + 1) * nx + i2];
+      if (isNaN(a) || isNaN(b2) || isNaN(c2) || isNaN(d2)) continue;
+      var code = (a > lev ? 8 : 0) | (b2 > lev ? 4 : 0) | (c2 > lev ? 2 : 0) | (d2 > lev ? 1 : 0);
+      if (code === 0 || code === 15) continue;
+      var X0 = x + i2 * cs, Y0 = y + j2 * cs;
+      var T = [X0 + cs * (lev - a) / (b2 - a), Y0], R = [X0 + cs, Y0 + cs * (lev - b2) / (c2 - b2)], B = [X0 + cs * (lev - d2) / (c2 - d2), Y0 + cs], L = [X0, Y0 + cs * (lev - a) / (d2 - a)];
+      var segs = { 1: [[L, B]], 2: [[B, R]], 3: [[L, R]], 4: [[T, R]], 5: [[L, T], [B, R]], 6: [[T, B]], 7: [[L, T]], 8: [[L, T]], 9: [[T, B]], 10: [[T, R], [L, B]], 11: [[T, R]], 12: [[L, R]], 13: [[B, R]], 14: [[L, B]] }[code];
+      segs.forEach(function (sg) { g.moveTo(sg[0][0], sg[0][1]); g.lineTo(sg[1][0], sg[1][1]); });
+    }
+    g.stroke();
+  }
+}
+// dibuja un panel de mapa; layers: [{coords,color,width,dash}], marks: [{lat,lng,label,kind}], pts: puntos numerados
+function mapPanel(g, x, y, w, h, fitList, layers, marks, pts, dem) {
+  g.save(); rr(g, x, y, w, h, 16); g.fillStyle = '#000'; g.fill(); g.clip();
+  var lat0 = fitList[0].lat, k = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
+  var xs = fitList.map(function (p) { return p.lng * k; }), ys = fitList.map(function (p) { return -p.lat * ky; });
+  var mnx = Math.min.apply(0, xs), mxx = Math.max.apply(0, xs), mny = Math.min.apply(0, ys), mxy = Math.max.apply(0, ys);
+  var sc = Math.min((w - 70) / Math.max(mxx - mnx, 80), (h - 70) / Math.max(mxy - mny, 80)), cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
+  function X(p) { return { x: x + w / 2 + (p.lng * k - cx) * sc, y: y + h / 2 + (-p.lat * ky - cy) * sc }; }
+  function LL(px, py) { return { lat: -((py - y - h / 2) / sc + cy) / ky, lng: ((px - x - w / 2) / sc + cx) / k }; }
+  if (dem) drawContours(g, x, y, w, h, LL, dem);
+  else { g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = .6; for (var gx = x; gx < x + w; gx += 40) { g.beginPath(); g.moveTo(gx, y); g.lineTo(gx, y + h); g.stroke(); } for (var gy = y; gy < y + h; gy += 40) { g.beginPath(); g.moveTo(x, gy); g.lineTo(x + w, gy); g.stroke(); } }
+  layers.forEach(function (L) {
+    if (!L.coords || L.coords.length < 2) return;
+    g.strokeStyle = L.color; g.lineWidth = L.width; g.lineJoin = g.lineCap = 'round'; g.setLineDash(L.dash || []); g.beginPath();
+    L.coords.forEach(function (p, i) { var q = X(p); if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y); }); g.stroke(); g.setLineDash([]);
+    if (L.label) { var m = X(L.coords[Math.floor(L.coords.length / 2)]); font(g, '700', 11); var tw = g.measureText(L.label).width; g.fillStyle = 'rgba(0,0,0,.8)'; g.strokeStyle = L.color; g.lineWidth = 1.2; rr(g, m.x - tw / 2 - 7, m.y - 21, tw + 14, 18, 9); g.fill(); g.stroke(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(L.label, m.x, m.y - 8); g.textAlign = 'left'; }
+  });
+  marks.forEach(function (m) {
+    var q = X(m); g.fillStyle = m.kind === 'start' ? '#FFD200' : '#000'; g.strokeStyle = '#FFD200'; g.lineWidth = 2.5;
+    g.beginPath(); g.arc(q.x, q.y, 6, 0, 7); g.fill(); g.stroke();
+    font(g, '700', 12); g.fillStyle = '#FFD200'; g.textAlign = m.kind === 'start' ? 'left' : 'right'; g.fillText(m.label, q.x + (m.kind === 'start' ? 11 : -11), q.y + 4); g.textAlign = 'left';
+  });
+  pts.forEach(function (p) {
+    if (p.lat == null) return; var q = X(p);
+    g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 2.5; g.beginPath(); g.arc(q.x, q.y, 11, 0, 7); g.fill(); g.stroke();
+    font(g, '800', 12); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, q.x, q.y + 1); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  });
+  // escala
+  var steps = [100, 200, 500, 1000, 2000, 5000, 10000], st = steps.filter(function (v) { return v * sc >= 50; })[0] || 10000;
+  g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(x + 16, y + h - 18, st * sc, 2.5); font(g, '600', 10); g.fillText(st >= 1000 ? st / 1000 + ' km' : st + ' m', x + 16, y + h - 24);
+  g.restore();
+  g.strokeStyle = 'rgba(255,255,255,.26)'; g.lineWidth = 1; rr(g, x, y, w, h, 16); g.stroke();
+  return { mpp: 1 / sc, bounds: { n: LL(x, y).lat, w: LL(x, y).lng, s: LL(x + w, y + h).lat, e: LL(x + w, y + h).lng } };
+}
+var bmCache = {};
+function bitmapOf(m) { return bmCache[m.id] || (bmCache[m.id] = createImageBitmap(m.blob).catch(function () { return null; })); }
+function drawCover(g, bm, x, y, w, h, r) {
+  g.save(); rr(g, x, y, w, h, r); g.clip();
+  if (bm) { var k = Math.max(w / bm.width, h / bm.height), dw = bm.width * k, dh = bm.height * k; g.drawImage(bm, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh); }
+  else { g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(x, y, w, h); }
+  g.restore();
+}
+var SIGC = { 'Buena': '#34C759', 'Débil': '#FFD60A', 'Sin datos': '#FF9F0A' };
+function drawCard(g, p, x, y, w, h) {
+  rr(g, x, y, w, h, 16); g.fillStyle = 'rgba(255,255,255,.07)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = .8; g.stroke();
+  var ph = p.photos, jobs = [];
+  if (ph.length === 1) jobs.push(bitmapOf(ph[0]).then(function (b) { drawCover(g, b, x + 10, y + 10, 104, h - 20, 8); }));
+  else if (ph.length > 1) {
+    var hh = (h - 26) / 2;
+    jobs.push(bitmapOf(ph[0]).then(function (b) { drawCover(g, b, x + 10, y + 10, 104, hh, 8); }));
+    jobs.push(bitmapOf(ph[1]).then(function (b) { drawCover(g, b, x + 10, y + 16 + hh, 104, hh, 8); if (ph.length > 2) { font(g, '700', 11); var t = '+' + (ph.length - 2), tw = g.measureText(t).width; g.fillStyle = 'rgba(0,0,0,.65)'; rr(g, x + 110 - tw - 10, y + h - 30, tw + 8, 16, 6); g.fill(); g.fillStyle = '#fff'; g.fillText(t, x + 110 - tw - 6, y + h - 18); } }));
+  } else { g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, x + 10, y + 10, 104, h - 20, 8); g.fill(); }
+  var tx = ph.length ? x + 124 : x + 124, tw2 = w - (tx - x) - 12;
+  return Promise.all(jobs).then(function () {
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(tx + 12, y + 22, 12, 0, 7); g.fill();
+    font(g, '800', 13); g.fillStyle = '#000'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.n, tx + 12, y + 23); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    font(g, '700', 13); g.fillStyle = '#fff';
+    var dtxt = p.d != null ? fmtD(p.d) + (p.from === 'LPE' ? ' desde la largada' : ' desde el ' + p.from) : 'Punto ' + p.n;
+    g.fillText(dtxt, tx + 30, y + 27);
+    var meta = [], sigc = p.signal ? SIGC[p.signal] : null;
+    if (p.toEnd != null && p.last) meta.push(fmtD(p.toEnd) + ' a la llegada');
+    meta.push(pl(p.photos.length, 'foto', 'fotos') + (p.audios.length ? ' · ' + pl(p.audios.length, 'nota', 'notas') : ''));
+    font(g, '500', 11.5); g.fillStyle = '#D1D1D6'; g.fillText(meta.join(' · '), tx, y + 52);
+    if (p.signal) { g.fillStyle = sigc; g.beginPath(); g.arc(tx + 4, y + 69, 4, 0, 7); g.fill(); g.fillStyle = '#D1D1D6'; g.fillText('Señal ' + p.signal.toLowerCase(), tx + 13, y + 73); }
+    var authors = []; p.photos.forEach(function (m) { if (m.author && authors.indexOf(m.author) < 0) authors.push(m.author); });
+    var desc = p.media.map(function (m) { return m.summary; }).filter(Boolean).join(' ');
+    font(g, '500', 12); g.fillStyle = desc ? '#F2F2F7' : '#8E8E93';
+    wrap(g, desc || (p.audios.length ? 'Nota de voz sin desgrabar todavía.' : (authors.length ? 'Fotos de ' + authors.join(', ') : 'Sin descripción.')), tx, y + (p.signal ? 93 : 74), tw2, 15, p.signal ? 2 : 3);
+  });
+}
+function pdfStageOf(t) { var st = tramoStage(t); return st; }
+function buildPDF(onStep) {
+  if (!window.jspdf) return Promise.reject(new Error('Falta la librería de PDF. Recargá la app con señal.'));
+  var T = allTramos().map(function (t) { var st = tramoStage(t), pts = pointsOf(mediaOf(t), st); pointDistances(t, pts, st); if (pts.length) pts[pts.length - 1].last = true; return { t: t, st: st, pts: pts }; }).filter(function (x) { return x.pts.length; });
+  if (!T.length) return Promise.reject(new Error('Todavía no hay puntos para armar el mapa.'));
+  var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true }), first = true, today = new Date().toLocaleDateString('es-AR');
+  function add(P) { if (!first) doc.addPage(); first = false; doc.addImage(P.c.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, 595.28, 841.89); }
+  var COLORS = ['#7FE3F0', '#FF9F0A', '#BF5AF2', '#30D158', '#FF375F', '#64D2FF', '#5E5CE6', '#AC8E68'];
+  // hoja 1: mapa general
+  onStep('Armando el mapa general…');
+  var P = newPage(), stages = S.kmz ? S.kmz.stages : [];
+  header(P, S.kmz ? 'Mapa general' : 'Relevamiento', (S.kmz ? stages.length + ' tramos en el KMZ · ' : '') + pl(T.length, 'tramo relevado', 'tramos relevados') + ' · ' + today, S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') : '', '');
+  var fit = [].concat.apply([], stages.map(function (st) { return st.coords; })).concat(trackSorted());
+  T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) fit.push(p); }); });
+  var layers = stages.map(function (st, i) { return { coords: st.coords, color: COLORS[i % COLORS.length], width: 3.5, label: st.name }; });
+  var allPts = []; T.forEach(function (x) { x.pts.forEach(function (p) { if (p.lat != null) allPts.push({ lat: p.lat, lng: p.lng, n: '' }); }); });
+  var gen = function (dem) { var Q = newPage(); header(Q, S.kmz ? 'Mapa general' : 'Relevamiento', (S.kmz ? stages.length + ' tramos en el KMZ · ' : '') + pl(T.length, 'tramo relevado', 'tramos relevados') + ' · ' + today, S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '') : '', ''); mapPanel(Q.g, 40, 120, 714, 700, fit, layers, [], [], dem); return Q; };
+  var info = mapPanel(P.g, 40, 120, 714, 700, fit, layers, [], [], null);
+  return fetchDEM(info.bounds, info.mpp).then(function (dem) {
+    P = gen(dem);
+    var g = P.g, y = 850;
+    font(g, '700', 13); g.fillStyle = '#fff'; g.fillText('Tramos relevados', 40, y); y += 18;
+    T.forEach(function (x, i) {
+      if (y > PH - 50) return;
+      var name = x.st ? x.st.name : 'Tramo ' + x.t.n, len = x.st ? x.st.len : tramoLen(x.t);
+      font(g, '600', 12); g.fillStyle = '#F2F2F7'; g.fillText(name, 40, y + 12);
+      font(g, '500', 12); g.fillStyle = '#D1D1D6'; g.fillText(fmtD(len) + ' · ' + pl(x.pts.length, 'punto', 'puntos') + ' · ' + pl(x.pts.reduce(function (s, p) { return s + p.photos.length; }, 0), 'foto', 'fotos'), 200, y + 12);
+      y += 20;
+    });
+    add(P);
+    // una hoja (o más) por tramo
+    return T.reduce(function (pr, x, ti) {
+      return pr.then(function () {
+        onStep('Tramo ' + (ti + 1) + ' de ' + T.length + '…');
+        var name = x.st ? x.st.name : 'Tramo ' + x.t.n, len = x.st ? x.st.len : tramoLen(x.t);
+        var coords = x.st ? x.st.coords : trackSorted().filter(function (p) { return p.t >= x.t.t0 && p.t <= (x.t.t1 === Infinity ? Date.now() : x.t.t1); });
+        var fit2 = coords.concat(x.pts.filter(function (p) { return p.lat != null; }));
+        if (!fit2.length) fit2 = [{ lat: 0, lng: 0 }];
+        var marks = x.st ? [{ lat: x.st.start.lat, lng: x.st.start.lng, label: x.st.start.name, kind: 'start' }, { lat: x.st.end.lat, lng: x.st.end.lng, label: x.st.end.name, kind: 'end' }] : [];
+        var lay = [{ coords: coords, color: '#FFD200', width: 4.5 }];
+        var probe = newPage(), inf = mapPanel(probe.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, null);
+        return fetchDEM(inf.bounds, inf.mpp).then(function (dem) {
+          var per1 = 7, perN = 14, pages = [x.pts.slice(0, per1)];
+          for (var i = per1; i < x.pts.length; i += perN) pages.push(x.pts.slice(i, i + perN));
+          return pages.reduce(function (pp, chunk, pi) {
+            return pp.then(function () {
+              var Q = newPage(), sub = fmtD(len) + ' · ' + pl(x.pts.length, 'punto', 'puntos') + ' · ' + today;
+              header(Q, name + (pi ? ' · continuación' : ''), sub, 'Tramo ' + (ti + 1) + ' de ' + T.length, pages.length > 1 ? 'Hoja ' + (pi + 1) + ' de ' + pages.length : '');
+              var top = 116;
+              if (pi === 0) { mapPanel(Q.g, 40, 116, 714, 402, fit2, lay, marks, x.pts, dem); top = 532; }
+              var cw = 352, chh = 130, jobs = [];
+              chunk.forEach(function (p, k) { jobs.push(drawCard(Q.g, p, 40 + (k % 2) * (cw + 10), top + Math.floor(k / 2) * (chh + 10), cw, chh)); });
+              if (pi === 0 && chunk.length === per1) {
+                var lx = 40 + cw + 10, ly = top + 3 * (chh + 10), gq = Q.g, lastP = x.pts[x.pts.length - 1];
+                rr(gq, lx, ly, cw, chh, 16); gq.fillStyle = 'rgba(255,255,255,.05)'; gq.fill();
+                font(gq, '700', 13); gq.fillStyle = '#fff'; gq.fillText('Referencias', lx + 14, ly + 26);
+                font(gq, '500', 12); gq.fillStyle = '#D1D1D6';
+                if (lastP && lastP.toEnd != null) gq.fillText('Último punto a la llegada: ' + fmtD(lastP.toEnd), lx + 14, ly + 48);
+                [['Buena', 'Señal buena'], ['Débil', 'Señal débil'], ['Sin datos', 'Sin datos']].forEach(function (r, i) { gq.fillStyle = SIGC[r[0]]; gq.beginPath(); gq.arc(lx + 18, ly + 68 + i * 18, 4, 0, 7); gq.fill(); gq.fillStyle = '#D1D1D6'; gq.fillText(r[1], lx + 28, ly + 72 + i * 18); });
+              }
+              return Promise.all(jobs).then(function () { add(Q); });
+            });
+          }, Promise.resolve());
+        });
+      });
+    }, Promise.resolve());
+  }).then(function () { return doc.output('blob'); });
+}
+document.getElementById('pdfBtn').onclick = function () {
+  var btn = this, msg = document.getElementById('pdfMsg'); btn.disabled = true;
+  buildPDF(function (t) { msg.textContent = t; }).then(function (blob) {
+    var name = 'ojos-de-tapir_' + (S.kmz ? S.kmz.file.replace(/\.km[zl]$/i, '').replace(/[^\w\-]+/g, '_') + '_' : '') + new Date().toISOString().slice(0, 10) + '.pdf';
+    var file = new File([blob], name, { type: 'application/pdf' });
+    msg.textContent = 'Listo: ' + (blob.size / 1048576).toFixed(1).replace('.', ',') + ' MB.';
+    if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(function () {});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  }).catch(function (e) { msg.textContent = e.message || 'No se pudo armar el PDF'; }).then(function () { btn.disabled = false; });
+};
+
+/* ---------- nueva carrera (reset) ---------- */
+document.getElementById('resetBtn').onclick = function () {
+  var ph = S.media.filter(function (m) { return m.type === 'photo'; }).length, au = S.media.filter(function (m) { return m.type === 'audio'; }).length;
+  document.getElementById('resetSum').textContent = 'Se borran de este iPhone: ' + (S.kmz ? 'el KMZ «' + S.kmz.file + '», ' : '') + pl(tramos().length, 'tramo', 'tramos') + ', ' + pl(ph, 'foto', 'fotos') + ', ' + pl(au, 'nota de voz', 'notas de voz') + ' y ' + pl(S.track.length, 'posición', 'posiciones') + ' GPS. No se puede deshacer.';
+  document.getElementById('resetDim').classList.add('on');
+};
+document.getElementById('resetCancel').onclick = function () { document.getElementById('resetDim').classList.remove('on'); };
+document.getElementById('resetZip').onclick = function () { document.getElementById('resetDim').classList.remove('on'); document.getElementById('exZip').click(); };
+(function () {
+  var b = document.getElementById('resetHold'), fill = document.getElementById('resetFill'), sub = document.getElementById('resetSub'), raf = null, t0 = 0;
+  function cancel() { cancelAnimationFrame(raf); raf = null; fill.style.width = '0'; sub.textContent = 'Mantené apretado 3 segundos'; }
+  function step() {
+    var k = Math.min(1, (performance.now() - t0) / 3000); fill.style.width = (k * 100) + '%';
+    sub.textContent = k < 1 ? 'Seguí apretando… ' + Math.ceil(3 - k * 3) : 'Borrando…';
+    if (k >= 1) { raf = null; vib([60, 60, 60]); resetAll(); return; }
+    raf = requestAnimationFrame(step);
+  }
+  b.addEventListener('pointerdown', function (e) { e.preventDefault(); t0 = performance.now(); raf = requestAnimationFrame(step); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { b.addEventListener(ev, function () { if (raf) cancel(); }); });
+  b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+function resetAll() {
+  var stores = ['track', 'media', 'flags', 'kmz'];
+  new Promise(function (res, rej) {
+    var t = DB.tx(stores); stores.forEach(function (st) { t.objectStore(st).clear(); });
+    t.oncomplete = res; t.onerror = function () { rej(t.error); };
+  }).then(function () {
+    Object.keys(URLS).forEach(function (k) { URL.revokeObjectURL(URLS[k]); delete URLS[k]; });
+    S.track = []; S.media = []; S.flags = []; S.kmz = null; GPS.last = null; cumCache = null; stCache = {}; tsCache = {}; GM.fitted = false; PT.sel = null;
+    document.getElementById('resetDim').classList.remove('on');
+    document.getElementById('resetFill').style.width = '0';
+    toast('Listo: carrera nueva, todo en cero', 3000); cur = null; go('inicio');
+  }).catch(function () { toast('No se pudo borrar. Probá de nuevo.', 4000); });
+}
 
 /* ---------- arranque ---------- */
 document.getElementById('ver').textContent = 'Ojos de Tapir v' + VERSION;
